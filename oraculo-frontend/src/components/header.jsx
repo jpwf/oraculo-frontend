@@ -34,8 +34,20 @@ const getStatusMeta = (systemStatus) => {
   return { label: 'Online', className: 'status-online' }
 }
 
-function Header({ system_status = 'online', initialLatency = 18 }) {
-  const [selectedMode, setSelectedMode] = useState('VPP')
+function Header({
+  system_status = 'online',
+  initialLatency = 18,
+  title = 'ORÁCULO',
+  dispatchText = 'ISO DISPATCH V4.18',
+  modeOptions = ['VPP', 'MODELS'],
+  defaultMode = 'VPP',
+  showDispatch = true,
+  showModeSwitch = true,
+  showStatus = true,
+  showLatency = true,
+  showUtc = true,
+}) {
+  const [selectedMode, setSelectedMode] = useState(defaultMode)
   const [latencyMs, setLatencyMs] = useState(initialLatency)
   const [utcTime, setUtcTime] = useState(() => formatUtcDate(new Date()))
 
@@ -53,44 +65,51 @@ function Header({ system_status = 'online', initialLatency = 18 }) {
     <header className="header">
       <div className="left-side">
         <p>logo</p>
-        <h2>ORÁCULO</h2>
-        <div className="dispatch-copy">
-          <h3>ISO DISPATCH V4.18</h3>
-        </div>
+        <h2>{title}</h2>
 
-        <div className="type-switch" aria-label="Display mode switch">
-          <button
-            type="button"
-            className={`switch-button ${selectedMode === 'VPP' ? 'selected' : ''}`}
-            onClick={() => setSelectedMode('VPP')}
-          >
-            VPP
-          </button>
-          <button
-            type="button"
-            className={`switch-button ${selectedMode === 'MODELS' ? 'selected' : ''}`}
-            onClick={() => setSelectedMode('MODELS')}
-          >
-            MODELS
-          </button>
-        </div>
+        {showDispatch && (
+          <div className="dispatch-copy">
+            <h3>{dispatchText}</h3>
+          </div>
+        )}
+
+        {showModeSwitch && (
+          <div className="type-switch" aria-label="Display mode switch">
+            {modeOptions.map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={`switch-button ${selectedMode === option ? 'selected' : ''}`}
+                onClick={() => setSelectedMode(option)}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="right-side">
-        <div className="status-block">
-          <span className={`bullet-status ${statusMeta.className}`}></span>
-          <span className={`text-status ${statusMeta.className}`}>System {statusMeta.label}</span>
-        </div>
+        {showStatus && (
+          <div className="status-block">
+            <span className={`bullet-status ${statusMeta.className}`}></span>
+            <span className={`text-status ${statusMeta.className}`}>System {statusMeta.label}</span>
+          </div>
+        )}
 
-        <div className="latency-block">
-          <span className="bullet-status secondary-bullet"></span>
-          <p className="latency-value">{latencyMs} ms</p>
-          <span className="latency-label">LATENCY</span>
-        </div>
+        {showLatency && (
+          <div className="latency-block">
+            <span className="bullet-status secondary-bullet"></span>
+            <p className="latency-value">{latencyMs} ms</p>
+            <span className="latency-label">LATENCY</span>
+          </div>
+        )}
 
-        <div className="utc-block">
-          <span className="utc-value">{utcTime}</span>
-        </div>
+        {showUtc && (
+          <div className="utc-block">
+            <span className="utc-value">{utcTime}</span>
+          </div>
+        )}
       </div>
     </header>
   )
