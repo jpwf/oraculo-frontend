@@ -1,4 +1,5 @@
 import Header from '../components/header'
+import RiskMap from '../components/RiskMap'
 import '../App.css'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -37,6 +38,8 @@ const formatUtcDate = (date) => {
   return `${values.month} ${values.day}, ${values.year} ${values.hour}:${values.minute}:${values.second} UTC`
 }
 
+
+
 function TelemetryPage() {
   const [regiao, setRegiao] = useState('Northeast')
   const [uf, setUf] = useState('NE')
@@ -50,6 +53,7 @@ function TelemetryPage() {
   const [energyRiskMwh, setEnergyRiskMwh] = useState(154)
   const [criticalWindow, setCriticalWindow] = useState('12:00 - 18:00')
   const curtailmentChartRef = useRef(null)
+  const [mapCoordinates, setCoordinates] = useState([-41.83, -9.45])
 
   const isHighCurtailment = curtailmentValue > 60
   const isHighEnergyRisk = energyRiskValue > 200
@@ -254,8 +258,22 @@ function TelemetryPage() {
 
       <div className="risks-details">
         <div className="risk-map">
-          <div className="risk-map-header"></div>
-          <span>Mapa</span>
+          <RiskMap
+            coordinates={mapCoordinates}
+            points={[
+              { label: 'High Risk', value: `${curtailmentValue}%`, color: '#ef4444' },
+              { label: 'Medium Risk', value: `${p50}%`, color: '#f59e0b' },
+              { label: 'Low Risk', value: `${p10}%`, color: '#38bdf8' },
+            ]}
+            resources={[
+              { type: 'WIND', name: 'Wind Farm 1', coordinates: [-40.1, -11.5], color: '#38bdf8' },
+              { type: 'WIND', name: 'Wind Farm 2', coordinates: [-39.2, -9.8], color: '#38bdf8' },
+              { type: 'SOLAR_PLANT', name: 'Solar Plant 1', coordinates: [-38.5, -3.7], color: '#f59e0b' },
+              { type: 'SOLAR_PLANT', name: 'Solar Plant 2', coordinates: [-41.1, -7.4], color: '#f59e0b' },
+              { type: 'MMGD', name: 'MMGD 1', coordinates: [-42.5, -12.8], color: '#34d399' },
+              { type: 'BESS', name: 'BESS 1', coordinates: [-39.8, -8.9], color: '#a78bfa' },
+            ]}
+          />
         </div>
 
         <div className="risk-deep-data">
@@ -357,6 +375,197 @@ function TelemetryPage() {
               </svg>
             </div>
           </div>
+        </div>
+      </div>
+      <div className="renew-scenarios panel-block">
+        <div className="panel-header">
+          <h3>Renewable Generation Scenarios (MW)</h3>
+          <div className="panel-header-tools">
+            <div className="inline-legend">
+              <span className="legend-swatch p90" /> P90
+              <span className="legend-swatch p50" /> P50
+              <span className="legend-swatch p10" /> P10
+            </div>
+          </div>
+        </div>
+
+        <div className="scenario-layout">
+          <div className="scenario-cards">
+            <div className="scenario-card selected">
+              <span className="scenario-label">Best Case (P50)</span>
+              <div className="scenario-value-row">
+                <strong>2,400</strong>
+                <span>MW</span>
+              </div>
+              <small>Curtailment: 210 MW</small>
+            </div>
+
+            <div className="scenario-card worst-case">
+              <span className="scenario-label">Worst Case (P10)</span>
+              <div className="scenario-value-row">
+                <strong>1,900</strong>
+                <span>MW</span>
+              </div>
+              <small>Curtailment: 380 MW</small>
+            </div>
+
+            <div className="scenario-card best-case">
+              <span className="scenario-label">Best Case (P90)</span>
+              <div className="scenario-value-row">
+                <strong>2,800</strong>
+                <span>MW</span>
+              </div>
+              <small>Curtailment: 80 MW</small>
+            </div>
+
+            <div className="scenario-card">
+              <span className="scenario-label">Scenario</span>
+              <select defaultValue="scenario-1">
+                <option value="scenario-1">Select scenario</option>
+                <option value="scenario-2">Low curtailment</option>
+                <option value="scenario-3">Base case</option>
+                <option value="scenario-4">High stress</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="scenario-chart-panel">
+            <div className="chart-topline">
+              <span>Generation Scenarios — N possible trajectories</span>
+              <div className="chart-line-labels">
+                <span style={{ color: '#f5b94b' }}>P90</span>
+                <span style={{ color: '#3dd9ff' }}>P50</span>
+                <span style={{ color: '#f97316' }}>P10</span>
+              </div>
+            </div>
+
+            <svg viewBox="0 0 640 240" className="scenario-svg" role="img" aria-label="Renewable generation scenarios chart">
+              {[0, 1, 2, 3, 4].map((tick) => {
+                const y = 20 + tick * 46
+                return <line key={tick} x1="28" y1={y} x2="610" y2={y} stroke="rgba(148,163,184,0.18)" strokeDasharray="4 8" />
+              })}
+
+              <path d="M 30 170 C 100 150, 150 128, 210 118 S 330 100, 390 92 S 500 75, 610 60" fill="none" stroke="#f59e0b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M 30 190 C 90 180, 120 160, 180 142 S 300 114, 390 104 S 510 92, 610 88" fill="none" stroke="#3dd9ff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M 30 205 C 100 198, 170 186, 250 170 S 380 130, 440 120 S 540 106, 610 92" fill="none" stroke="#f97316" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+
+              {[0, 1, 2, 3, 4, 5].map((tick) => {
+                const x = 30 + tick * 116
+                const labels = ['00:00', '06:00', '12:00', '18:00', '24:00', '30:00']
+                return (
+                  <text key={tick} x={x} y="224" fill="rgba(219,225,235,0.7)" fontSize="10" textAnchor="middle">
+                    {labels[tick]}
+                  </text>
+                )
+              })}
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div className="vpp-sources panel-block">
+        <div className="vpp-header-row">
+          <h3>VPP Resources <span>(Available for Curtailment Mitigation &amp; Dispatch)</span></h3>
+          <div className="aggregate-select">
+            <span>Aggregate by:</span>
+            <select defaultValue="Region">
+              <option>Region</option>
+              <option>Asset</option>
+              <option>Technology</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="vpp-main-layout">
+          <div className="vpp-cards">
+            <div className="vpp-card">
+              <div className="vpp-card-head">
+                <span className="resource-icon green">⚡</span>
+                BESS
+              </div>
+              <div className="vpp-value">180 <small>MW</small></div>
+              <div className="vpp-subvalue">428 MWh</div>
+              <div className="vpp-foot">
+                <span>Availability: 96%</span>
+                <span>Assets: 8</span>
+                <button type="button">View details</button>
+              </div>
+            </div>
+
+            <div className="vpp-card">
+              <div className="vpp-card-head">
+                <span className="resource-icon blue">◫</span>
+                MMGD
+              </div>
+              <div className="vpp-value">120 <small>MW</small></div>
+              <div className="vpp-subvalue">Solar DG</div>
+              <div className="vpp-foot">
+                <span>Availability: 91%</span>
+                <span>Assets: 56</span>
+                <button type="button">View details</button>
+              </div>
+            </div>
+
+            <div className="vpp-card">
+              <div className="vpp-card-head">
+                <span className="resource-icon amber">▣</span>
+                Distributed Gen
+              </div>
+              <div className="vpp-value">68 <small>MW</small></div>
+              <div className="vpp-subvalue">60 MW / Hydro</div>
+              <div className="vpp-foot">
+                <span>Availability: 94%</span>
+                <span>Assets: 66</span>
+                <button type="button">View details</button>
+              </div>
+            </div>
+
+            <div className="vpp-card">
+              <div className="vpp-card-head">
+                <span className="resource-icon cyan">◇</span>
+                Flexible Loads
+              </div>
+              <div className="vpp-value">75 <small>MW</small></div>
+              <div className="vpp-subvalue">Industrial DR</div>
+              <div className="vpp-foot">
+                <span>Availability: 88%</span>
+                <span>Assets: 10</span>
+                <button type="button">View details</button>
+              </div>
+            </div>
+
+            <div className="vpp-card">
+              <div className="vpp-card-head">
+                <span className="resource-icon violet">◎</span>
+                Other Resources
+              </div>
+              <div className="vpp-value">40 <small>MW</small></div>
+              <div className="vpp-subvalue">Demand response</div>
+              <div className="vpp-foot">
+                <span>Availability: 90%</span>
+                <span>Assets: 19</span>
+                <button type="button">View details</button>
+              </div>
+            </div>
+          </div>
+
+          <aside className="mitigation-panel">
+            <div className="mitigation-header">
+              <span className="mitigation-badge">✓</span>
+              Recommened ISO dispatch action
+            </div>
+
+            <h4>Activate 180 MW of BESS between 13:30 and 16:45</h4>
+
+            <div className="mitigation-metrics">
+              <div><span>Curtailment without action:</span><strong>320 MW</strong></div>
+              <div><span>Curtailment after action:</span><strong>75 MW</strong></div>
+              <div><span>Energy potentially recovered:</span><strong>225 MWh</strong></div>
+              <div><span>Mitigation coverage:</span><strong>82%</strong></div>
+            </div>
+
+            <button type="button" className="simulate-button">Simulate mitigation →</button>
+          </aside>
         </div>
       </div>
     </>
