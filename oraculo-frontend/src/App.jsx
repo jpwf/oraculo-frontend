@@ -1,112 +1,86 @@
 import './App.css'
 import { useEffect, useState } from 'react'
-import { Link, Route, Routes } from 'react-router-dom'
+import { Route, Routes } from 'react-router-dom'
 import TelemetryPage from './pages/TelemetryPage'
 import Header from './components/header'
-import api from './services/api'
-import { ArrowRight, MonitorCog, Network, Play, Radar, Cpu, Server, Zap } from 'lucide-react'
+import { fetchFirstAvailable } from './services/api'
+import { normalizeHomePayload } from './utils/normalizeHome'
+import { MonitorCog, Network, Radar, Cpu, Server, Boxes, Sparkles, MessageSquare, BarChart3 } from 'lucide-react'
+import Skeleton from './components/Skeleton'
+import ForecastChart from './components/ForecastChart'
 
-const architectureSteps = [
-  { title: 'Data Processing', detail: 'Load data', status: 'Ready', tone: 'muted' },
-  { title: 'Backend Model', detail: 'Forecast', status: 'Ready', tone: 'success' },
-  { title: 'Base Forecast', detail: 'Probabilistic', status: 'Ready', tone: 'warning' },
-  { title: 'Generative Super Ensemble', detail: 'Generate outputs', status: 'Ready', tone: 'accent' },
-  { title: 'Output & Evaluation', detail: 'Validate model', status: 'Ready', tone: 'info' },
-]
+const HOME_ENDPOINTS = ['data-models', 'data-telemetry', '/api/models', '/api/home', '/api/dashboard']
 
-const normalizeNumber = (value, fallback) => {
-  const number = Number(value)
-  return Number.isFinite(number) ? number : fallback
+// Mesma ideia dos controles da TelemetryPage: selecao dirigida por estado,
+// com Region acompanhando o submercado escolhido (submarket -> region).
+const submarketOptions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+
+const regionMap = {
+  N: 'North',
+  NE: 'Northeast',
+  E: 'East',
+  SE: 'Southeast',
+  S: 'South',
+  SW: 'Southwest',
+  W: 'West',
+  NW: 'Northwest',
 }
 
-const defaultHomePayload = {
-  baseForecast: 2400,
-  bestCase: 2880,
-  averageCase: 2400,
-  worstCase: 1980,
-  p10: 1850,
-  p50: 2400,
-  p90: 2960,
-  scenarios: 108,
-  curtailmentProbability: 78,
-  expectedVolume: '328 MW / 1,280 MWh',
-  highestRiskLocation: 'Northeast • Sobradinho',
-  criticalWindow: '13:30 — 16:45',
-  probableCause: 'Transmission (58%)',
-  generationForecast: { mae: 126, rmse: 188, mape: '8.4%' },
-  curtailmentOccurrence: { precision: 0.82, recall: 0.76, f1: 0.79 },
-  restrictedVolume: { mae: 95, rmse: 140, error: '12.6%' },
-  restrictionCause: { accuracy: 0.81, f1: 0.78, roc: 0.87 },
-  architectureSteps,
+// Icone por etapa do pipeline (foto de referencia do Motor de Previsao).
+const stepIcons = {
+  data: Boxes,
+  model: Sparkles,
+  forecast: MessageSquare,
+  ensemble: Sparkles,
+  output: BarChart3,
 }
 
 function HomePage() {
-  const [steps, setSteps] = useState(architectureSteps)
-  const [baseForecast, setBaseForecast] = useState(defaultHomePayload.baseForecast)
-  const [bestCase, setBestCase] = useState(defaultHomePayload.bestCase)
-  const [averageCase, setAverageCase] = useState(defaultHomePayload.averageCase)
-  const [worstCase, setWorstCase] = useState(defaultHomePayload.worstCase)
-  const [p10, setP10] = useState(defaultHomePayload.p10)
-  const [p50, setP50] = useState(defaultHomePayload.p50)
-  const [p90, setP90] = useState(defaultHomePayload.p90)
-  const [scenarios, setScenarios] = useState(defaultHomePayload.scenarios)
-  const [curtailmentProbability, setCurtailmentProbability] = useState(defaultHomePayload.curtailmentProbability)
-  const [expectedVolume, setExpectedVolume] = useState(defaultHomePayload.expectedVolume)
-  const [highestRiskLocation, setHighestRiskLocation] = useState(defaultHomePayload.highestRiskLocation)
-  const [criticalWindow, setCriticalWindow] = useState(defaultHomePayload.criticalWindow)
-  const [probableCause, setProbableCause] = useState(defaultHomePayload.probableCause)
-  const [generationForecast, setGenerationForecast] = useState(defaultHomePayload.generationForecast)
-  const [curtailmentOccurrence, setCurtailmentOccurrence] = useState(defaultHomePayload.curtailmentOccurrence)
-  const [restrictedVolume, setRestrictedVolume] = useState(defaultHomePayload.restrictedVolume)
-  const [restrictionCause, setRestrictionCause] = useState(defaultHomePayload.restrictionCause)
+  // Estado consolidado: UM objeto normalizado (antes eram ~18 useState).
+  // Ja inicia com os defaults resolvidos (inclui steps com Data Processing ativo).
+  const [data, setData] = useState(() => normalizeHomePayload({}))
+  // Loading das requisicoes: true ate a resposta chegar ou falhar.
+  const [isLoading, setIsLoading] = useState(true)
+  // Inputs do usuario ficam separados (nao vem da requisicao apos interacao).
+  const [uf, setUf] = useState(data.uf)
+  const [regiao, setRegiao] = useState(data.regiao)
+
+  // Horizonte vem do dado normalizado (alimentado pela requisicao).
+  const horizonte = data.horizonte
+  const steps = data.steps
 
   const applyHomeData = (payload = {}) => {
-    const feed = {
-      ...defaultHomePayload,
-      ...payload,
-      generationForecast: { ...defaultHomePayload.generationForecast, ...(payload.generationForecast || payload.forecast || {}) },
-      curtailmentOccurrence: { ...defaultHomePayload.curtailmentOccurrence, ...(payload.curtailmentOccurrence || payload.curtailment || {}) },
-      restrictedVolume: { ...defaultHomePayload.restrictedVolume, ...(payload.restrictedVolume || payload.volume || {}) },
-      restrictionCause: { ...defaultHomePayload.restrictionCause, ...(payload.restrictionCause || payload.cause || {}) },
-    }
-
-    setSteps(Array.isArray(feed.architectureSteps) && feed.architectureSteps.length ? feed.architectureSteps : architectureSteps)
-    setBaseForecast(normalizeNumber(feed.baseForecast ?? feed.generation?.baseForecast, defaultHomePayload.baseForecast))
-    setBestCase(normalizeNumber(feed.bestCase ?? feed.generation?.bestCase, defaultHomePayload.bestCase))
-    setAverageCase(normalizeNumber(feed.averageCase ?? feed.generation?.averageCase, defaultHomePayload.averageCase))
-    setWorstCase(normalizeNumber(feed.worstCase ?? feed.generation?.worstCase, defaultHomePayload.worstCase))
-    setP10(normalizeNumber(feed.p10 ?? feed.generation?.p10, defaultHomePayload.p10))
-    setP50(normalizeNumber(feed.p50 ?? feed.generation?.p50, defaultHomePayload.p50))
-    setP90(normalizeNumber(feed.p90 ?? feed.generation?.p90, defaultHomePayload.p90))
-    setScenarios(normalizeNumber(feed.scenarios ?? feed.generation?.scenarios, defaultHomePayload.scenarios))
-    setCurtailmentProbability(normalizeNumber(feed.curtailmentProbability ?? feed.curtailment?.probability, defaultHomePayload.curtailmentProbability))
-    setExpectedVolume(String(feed.expectedVolume ?? feed.curtailment?.expectedVolume ?? defaultHomePayload.expectedVolume))
-    setHighestRiskLocation(String(feed.highestRiskLocation ?? feed.location ?? defaultHomePayload.highestRiskLocation))
-    setCriticalWindow(String(feed.criticalWindow ?? feed.window ?? defaultHomePayload.criticalWindow))
-    setProbableCause(String(feed.probableCause ?? feed.cause ?? defaultHomePayload.probableCause))
-    setGenerationForecast(feed.generationForecast)
-    setCurtailmentOccurrence(feed.curtailmentOccurrence)
-    setRestrictedVolume(feed.restrictedVolume)
-    setRestrictionCause(feed.restrictionCause)
-  }
-
-  const fetchHomeData = async () => {
-    const endpoints = ['data-models', 'data-telemetry', '/api/models', '/api/home', '/api/dashboard']
-
-    for (const endpoint of endpoints) {
-      try {
-        const response = await api.get(endpoint)
-        applyHomeData(response.data)
-        return
-      } catch (error) {
-        console.warn(`Main page endpoint not available: ${endpoint}`, error)
-      }
-    }
+    setData(normalizeHomePayload(payload))
   }
 
   useEffect(() => {
-    fetchHomeData()
+    // Ponto 1A + 2A: corre todos os endpoints em paralelo (resolve no 1o que
+    // responder) e cancela a requisicao se o componente desmontar.
+    const controller = new AbortController()
+    // Teto de seguranca: nao deixa o skeleton preso se nada responder.
+    const safety = setTimeout(() => setIsLoading(false), 1500)
+
+    fetchFirstAvailable(HOME_ENDPOINTS, { signal: controller.signal, timeout: 30000 })
+      .then(({ data }) => applyHomeData(data))
+      .catch(() => {
+        // Nenhum endpoint respondeu: mantem os defaults ja aplicados no estado.
+      })
+      .finally(() => {
+        clearTimeout(safety)
+        setIsLoading(false)
+      })
+
+    return () => {
+      controller.abort()
+      clearTimeout(safety)
+    }
   }, [])
+
+  // Mesma logica da TelemetryPage: ao trocar o submercado, Region acompanha.
+  const handleSubmarketChange = (value) => {
+    setUf(value)
+    setRegiao(regionMap[value] || 'North')
+  }
 
   return (
     <div className="home-app-shell">
@@ -119,28 +93,23 @@ function HomePage() {
         defaultMode="MODELS"
       />
 
-      <div className="home-toolbar">
-        <div className="toolbar-stack">
-          <label className="toolbar-field">
-            <span>Region</span>
-            <select defaultValue="Northeast">
-              <option>Northeast</option>
-              <option>North</option>
-              <option>South</option>
+      <div className="system-infos">
+        <div className="left-sub-header">
+          <h3 className="region">Region: {regiao}({uf})</h3>
+
+          <label className="field uf-field">
+            <span>Submarket:</span>
+            <select className="uf" value={uf} onChange={(event) => handleSubmarketChange(event.target.value)}>
+              {submarketOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
             </select>
           </label>
 
-          <label className="toolbar-field">
-            <span>Horizon</span>
-            <select defaultValue="D0 + D1">
-              <option>D0 + D1</option>
-              <option>D1 + D2</option>
-              <option>Week</option>
-            </select>
-          </label>
+          <h3 className="horizon">Horizon: {horizonte} </h3>
         </div>
-
-        
       </div>
 
       <main className="home-main-wrapper">
@@ -154,96 +123,88 @@ function HomePage() {
           </div>
 
           <div className="subheading-row">
-            <small>Probabilistic renewable generation and curtailment inference pipeline running active</small>
+            <small className="pipeline-heading">MODEL ARCHITECTURE <em>(click on a step to run it)</em></small>
           </div>
 
           <div className="pipeline-steps">
-            {steps.map((step, index) => (
-              <div className={`pipeline-card ${step.tone}`} key={step.title}>
-                <div className="pipeline-card-header">
-                  <span className="step-number">{index + 1}</span>
-                  <span className="step-name">{step.title}</span>
-                  <span className="step-toggle">▢</span>
-                </div>
+            {steps.map((step, index) => {
+              const StepIcon = stepIcons[step.iconKey] || Cpu
+              return (
+                <div className={`pipeline-card ${step.active ? 'active' : ''}`} key={step.title}>
+                  {step.active && <span className="pipeline-badge">ACTIVE</span>}
 
-                <div className="pipeline-body">
-                  <div className="mini-icon"><Cpu size={14} /></div>
-                  <div className="step-detail">{step.detail}</div>
-                </div>
+                  <div className="pipeline-card-header">
+                    <span className="step-number">{index + 1}</span>
+                    <span className="step-name">{step.title}</span>
+                    <span className="pipeline-card-icon"><StepIcon size={15} /></span>
+                  </div>
 
-                <div className="step-actions">
-                  <button type="button" className="action-button shadowed">Run Step</button>
-                  <button type="button" className="action-button">Run Stop</button>
+                  <ul className="pipeline-list">
+                    {step.items.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+
+                  <button type="button" className="pipeline-run-button">Run Step</button>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
           <section className="home-panel panel-forecast">
-          <div className="panel-header-grid compact">
-            
-            <div className="panel-legend">
-              <span><em>P90</em></span>
-              <span><em>P50</em></span>
-              <span><em>P10</em></span>
-            </div>
-          </div>
-
           <div className="forecast-grid">
             <div className="chart-panel">
-              <svg viewBox="0 0 700 230" className="home-chart" role="img" aria-label="Forecast chart">
-                {[0, 1, 2, 3, 4].map((tick) => {
-                  const y = 20 + tick * 43
-                  return <line key={tick} x1="18" y1={y} x2="680" y2={y} stroke="rgba(148, 163, 184, 0.16)" strokeDasharray="4 8" />
-                })}
+              <div className="chart-panel-head">
+                <span className="chart-panel-title">Simulation Output — Generation Forecast</span>
+                <div className="forecast-legend">
+                  <span className="legend-item p90"><i /> P90</span>
+                  <span className="legend-item p50"><i /> P50 (Avg)</span>
+                  <span className="legend-item p10"><i /> P10</span>
+                  <span className="legend-item scenarios"><i /> Scenarios</span>
+                </div>
+              </div>
 
-                <path d="M 18 150 C 120 120, 170 90, 240 70 S 360 52, 430 80 S 560 92, 680 110" fill="none" stroke="#f0b75e" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-                <path d="M 18 160 C 120 142, 170 120, 240 90 S 360 72, 430 95 S 560 118, 680 124" fill="none" stroke="#5ed7ff" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-                <path d="M 18 175 C 120 156, 170 138, 240 118 S 360 92, 430 118 S 560 148, 680 144" fill="none" stroke="#f97616" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" strokeDasharray="8 8" />
-
-                {[0, 1, 2, 3, 4, 5].map((tick) => {
-                  const x = 70 + tick * 110
-                  const labels = ['00h', '06h', '12h', '18h', '24h', '30h']
-                  return <text key={tick} x={x} y="210" fill="rgba(214,222,234,0.75)" fontSize="11" textAnchor="middle">{labels[tick]}</text>
-                })}
-              </svg>
+              {/* Grafico plotado a partir dos dados (request) com tooltip no hover. */}
+              <ForecastChart hours={data.forecastHours} series={data.forecastSeries} />
             </div>
 
             <div className="key-output-panel">
+              <div className="key-output-title">Key Outputs</div>
+
               <div className="metrics-grid">
                 <div className="metric-box">
                   <span>Base Forecast</span>
-                  <strong>{baseForecast.toLocaleString()} MW</strong>
+                  <strong><Skeleton loading={isLoading} width={70} height={24}>{data.baseForecast.toLocaleString()} <small>MW</small></Skeleton></strong>
+                </div>
+                <div className="metric-box green">
+                  <span>Best Case</span>
+                  <strong><Skeleton loading={isLoading} width={70} height={24}>{data.bestCase.toLocaleString()} <small>MW</small></Skeleton></strong>
                 </div>
                 <div className="metric-box cyan">
-                  <span>Best Case</span>
-                  <strong>{bestCase.toLocaleString()} MW</strong>
-                </div>
-                <div className="metric-box amber">
                   <span>Average Case</span>
-                  <strong>{averageCase.toLocaleString()} MW</strong>
+                  <strong><Skeleton loading={isLoading} width={70} height={24}>{data.averageCase.toLocaleString()} <small>MW</small></Skeleton></strong>
                 </div>
                 <div className="metric-box red">
                   <span>Worst Case</span>
-                  <strong>{worstCase.toLocaleString()} MW</strong>
+                  <strong><Skeleton loading={isLoading} width={70} height={24}>{data.worstCase.toLocaleString()} <small>MW</small></Skeleton></strong>
                 </div>
               </div>
 
               <div className="mini-stat-row">
                 <div className="mini-stat">
                   <span>P10</span>
-                  <strong>{p10.toLocaleString()} MW</strong>
+                  <strong><Skeleton loading={isLoading} width={60}>{data.p10.toLocaleString()} <small>MW</small></Skeleton></strong>
                 </div>
-                <div className="mini-stat">
+                <div className="mini-stat active">
                   <span>P50</span>
-                  <strong>{p50.toLocaleString()} MW</strong>
+                  <strong><Skeleton loading={isLoading} width={60}>{data.p50.toLocaleString()} <small>MW</small></Skeleton></strong>
                 </div>
                 <div className="mini-stat">
                   <span>P90</span>
-                  <strong>{p90.toLocaleString()} MW</strong>
+                  <strong><Skeleton loading={isLoading} width={60}>{data.p90.toLocaleString()} <small>MW</small></Skeleton></strong>
                 </div>
                 <div className="mini-stat">
-                  <span>Scenarios</span>
-                  <strong>{scenarios}</strong>
+                  <span># Scenarios</span>
+                  <strong><Skeleton loading={isLoading} width={36}>{data.scenarios}</Skeleton></strong>
                 </div>
               </div>
             </div>
@@ -347,11 +308,11 @@ function HomePage() {
               <div className="summary-kpi-grid">
                 <div className="summary-kpi danger">
                   <div className="kpi-ring">
-                    <span>{curtailmentProbability}%</span>
+                    <span><Skeleton loading={isLoading} width={40}>{data.curtailmentProbability}%</Skeleton></span>
                   </div>
                   <div className="kpi-copy">
                     <strong>Curtailment Probability</strong>
-                    <small>{curtailmentProbability}% severe</small>
+                    <small><Skeleton loading={isLoading} width={80}>{data.curtailmentProbability}% severe</Skeleton></small>
                   </div>
                 </div>
 
@@ -359,7 +320,7 @@ function HomePage() {
                   <span className="box-icon">◌</span>
                   <div className="box-copy">
                     <strong>Expected Volume</strong>
-                    <small>{expectedVolume}</small>
+                    <small><Skeleton loading={isLoading} width={130}>{data.expectedVolume}</Skeleton></small>
                   </div>
                 </div>
 
@@ -367,7 +328,7 @@ function HomePage() {
                   <span className="box-icon">◌</span>
                   <div className="box-copy">
                     <strong>Highest-Risk Location</strong>
-                    <small>{highestRiskLocation}</small>
+                    <small><Skeleton loading={isLoading} width={140}>{data.highestRiskLocation}</Skeleton></small>
                   </div>
                 </div>
               </div>
@@ -375,11 +336,11 @@ function HomePage() {
               <div className="cause-summary-box">
                 <div className="cause-summary-row">
                   <span>Critical Window</span>
-                  <strong>{criticalWindow}</strong>
+                  <strong><Skeleton loading={isLoading} width={90}>{data.criticalWindow}</Skeleton></strong>
                 </div>
                 <div className="cause-summary-row">
                   <span>Probable Cause</span>
-                  <strong>{probableCause}</strong>
+                  <strong><Skeleton loading={isLoading} width={110}>{data.probableCause}</Skeleton></strong>
                 </div>
               </div>
             </aside>
@@ -407,9 +368,9 @@ function HomePage() {
                 <span className="dot green" />
               </div>
               <ul>
-                <li><strong>MAE</strong><span>{generationForecast.mae} MW</span></li>
-                <li><strong>RMSE</strong><span>{generationForecast.rmse} MW</span></li>
-                <li><strong>MAPE</strong><span>{generationForecast.mape}</span></li>
+                <li><strong>MAE</strong><span><Skeleton loading={isLoading} width={50}>{data.generationForecast.mae} MW</Skeleton></span></li>
+                <li><strong>RMSE</strong><span><Skeleton loading={isLoading} width={50}>{data.generationForecast.rmse} MW</Skeleton></span></li>
+                <li><strong>MAPE</strong><span><Skeleton loading={isLoading} width={40}>{data.generationForecast.mape}</Skeleton></span></li>
               </ul>
             </div>
 
@@ -419,9 +380,9 @@ function HomePage() {
                 <span className="dot red" />
               </div>
               <ul>
-                <li><strong>Precision</strong><span>{curtailmentOccurrence.precision}</span></li>
-                <li><strong>Recall</strong><span>{curtailmentOccurrence.recall}</span></li>
-                <li><strong>F1-Score</strong><span>{curtailmentOccurrence.f1}</span></li>
+                <li><strong>Precision</strong><span><Skeleton loading={isLoading} width={40}>{data.curtailmentOccurrence.precision}</Skeleton></span></li>
+                <li><strong>Recall</strong><span><Skeleton loading={isLoading} width={40}>{data.curtailmentOccurrence.recall}</Skeleton></span></li>
+                <li><strong>F1-Score</strong><span><Skeleton loading={isLoading} width={40}>{data.curtailmentOccurrence.f1}</Skeleton></span></li>
               </ul>
             </div>
 
@@ -431,9 +392,9 @@ function HomePage() {
                 <span className="dot yellow" />
               </div>
               <ul>
-                <li><strong>MAE</strong><span>{restrictedVolume.mae} MWh</span></li>
-                <li><strong>RMSE</strong><span>{restrictedVolume.rmse} MWh</span></li>
-                <li><strong>% Error</strong><span>{restrictedVolume.error}</span></li>
+                <li><strong>MAE</strong><span><Skeleton loading={isLoading} width={55}>{data.restrictedVolume.mae} MWh</Skeleton></span></li>
+                <li><strong>RMSE</strong><span><Skeleton loading={isLoading} width={55}>{data.restrictedVolume.rmse} MWh</Skeleton></span></li>
+                <li><strong>% Error</strong><span><Skeleton loading={isLoading} width={45}>{data.restrictedVolume.error}</Skeleton></span></li>
               </ul>
             </div>
 
@@ -443,9 +404,9 @@ function HomePage() {
                 <span className="dot blue" />
               </div>
               <ul>
-                <li><strong>Accuracy</strong><span>{restrictionCause.accuracy}</span></li>
-                <li><strong>F1-Score (avg)</strong><span>{restrictionCause.f1}</span></li>
-                <li><strong>ROC-AUC</strong><span>{restrictionCause.roc}</span></li>
+                <li><strong>Accuracy</strong><span><Skeleton loading={isLoading} width={40}>{data.restrictionCause.accuracy}</Skeleton></span></li>
+                <li><strong>F1-Score (avg)</strong><span><Skeleton loading={isLoading} width={40}>{data.restrictionCause.f1}</Skeleton></span></li>
+                <li><strong>ROC-AUC</strong><span><Skeleton loading={isLoading} width={40}>{data.restrictionCause.roc}</Skeleton></span></li>
               </ul>
             </div>
           </div>

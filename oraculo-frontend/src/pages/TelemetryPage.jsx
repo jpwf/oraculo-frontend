@@ -1,13 +1,19 @@
 import Header from '../components/header'
 import RiskMap from '../components/RiskMap'
 import '../App.css'
-import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { RefreshCw, Zap } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { RefreshCw, Zap, MapPin, TriangleAlert } from 'lucide-react'
 import * as echarts from 'echarts'
-import api from '../services/api'
+import { fetchFirstAvailable } from '../services/api'
+import { normalizeTelemetryPayload } from '../utils/normalizeTelemetry'
+import { useNormalizedTelemetry } from '../hooks/useNormalizedTelemetry'
+import { useTelemetryStream } from '../hooks/useTelemetryStream'
+import Skeleton from '../components/Skeleton'
 
 const directionOptions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+
+const TELEMETRY_ENDPOINTS = ['/data-telemetry', 'data-telemetry', '/api/telemetry']
+const TELEMETRY_STREAM_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/stream/telemetry`
 
 const regionMap = {
   N: 'North',
@@ -19,31 +25,6 @@ const regionMap = {
   W: 'West',
   NW: 'Northwest',
 }
-
-const defaultRiskPoints = [
-  { label: 'High Risk', value: '78%', color: '#ef4444' },
-  { label: 'Medium Risk', value: '42%', color: '#f59e0b' },
-  { label: 'Low Risk', value: '18%', color: '#38bdf8' },
-]
-
-const defaultMapResources = [
-  { type: 'WIND', name: 'Wind Farm 1', quantity: 180, coordinates: [-40.1, -11.5], color: '#38bdf8' },
-  { type: 'WIND', name: 'Wind Farm 2', quantity: 150, coordinates: [-39.2, -9.8], color: '#38bdf8' },
-  { type: 'SOLAR_PLANT', name: 'Solar Plant 1', quantity: 210, coordinates: [-38.5, -3.7], color: '#f59e0b' },
-  { type: 'SOLAR_PLANT', name: 'Solar Plant 2', quantity: 140, coordinates: [-41.1, -7.4], color: '#f59e0b' },
-  { type: 'MMGD', name: 'MMGD 1', quantity: 95, coordinates: [-42.5, -12.8], color: '#34d399' },
-  { type: 'BESS', name: 'BESS 1', quantity: 120, coordinates: [-39.8, -8.9], color: '#a78bfa' },
-]
-
-const defaultCauseRows = [
-  { label: 'Transmission', value: 58, color: '#ff5a5a' },
-  { label: 'Electrical', value: 24, color: '#4ecae6' },
-  { label: 'Energy', value: 12, color: '#f5b94b' },
-  { label: 'Other', value: 6, color: '#a7b0bf' },
-]
-
-const defaultRiskEvolutionSeries = [5, 18, 28, 45, 62, 78, 82, 64, 42, 22, 10, 6]
-const defaultRiskEvolutionPeak = { time: '14:15', value: 82 }
 
 const formatUtcDate = (date) => {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -64,179 +45,109 @@ const formatUtcDate = (date) => {
   return `${values.month} ${values.day}, ${values.year} ${values.hour}:${values.minute}:${values.second} UTC`
 }
 
-const parseNumber = (value, fallback = 0) => {
-  const number = Number(value)
-  return Number.isFinite(number) ? number : fallback
-}
-
-const parseCoordinates = (value, fallback = [-41.83, -9.45]) => {
-  if (Array.isArray(value) && value.length >= 2) {
-    const lon = Number(value[0])
-    const lat = Number(value[1])
-    if (Number.isFinite(lon) && Number.isFinite(lat)) {
-      return [lon, lat]
-    }
-  }
-
-  if (value && typeof value === 'object') {
-    const lon = Number(value.lon ?? value.lng ?? value.longitude ?? value.x)
-    const lat = Number(value.lat ?? value.latitude ?? value.y)
-    if (Number.isFinite(lon) && Number.isFinite(lat)) {
-      return [lon, lat]
-    }
-  }
-
-  if (typeof value === 'string' && value.includes(',')) {
-    const [lon, lat] = value.split(',').map((item) => Number(item.trim()))
-    if (Number.isFinite(lon) && Number.isFinite(lat)) {
-      return [lon, lat]
-    }
-  }
-
-  return fallback
-}
-
-const normalizeRiskPoints = (source) => {
-  if (!Array.isArray(source) || source.length === 0) return defaultRiskPoints
-
-  return source.map((point) => ({
-    label: point?.label || point?.name || 'Risk',
-    value: `${point?.value ?? point?.probability ?? 0}%`,
-    color: point?.color || '#38bdf8',
-  }))
-}
-
-const normalizeResources = (source) => {
-  const resourceList = Array.isArray(source) ? source : source ? Object.values(source).flat() : defaultMapResources
-
-  if (!Array.isArray(resourceList) || resourceList.length === 0) {
-    return defaultMapResources
-  }
-
-  return resourceList
-    .map((resource) => {
-      if (!resource || typeof resource !== 'object') return null
-
-      const type = String(resource.type || resource.kind || resource.category || 'DEFAULT').toUpperCase()
-      const coordinates = parseCoordinates(resource.coordinates ?? resource.coords ?? resource.position ?? resource.point ?? resource.location)
-
-      if (!coordinates) return null
-
-      return {
-        ...resource,
-        type,
-        name: resource.name || resource.label || resource.asset || type,
-        quantity: parseNumber(resource.quantity ?? resource.capacity ?? resource.mw ?? resource.amount ?? 1, 1),
-        coordinates,
-        color: resource.color || '#38bdf8',
-      }
-    })
-    .filter(Boolean)
-}
-
-const normalizeTelemetryPayload = (payload = {}) => {
-  const mapCoordinates = parseCoordinates(
-    payload.mapCoordinates ?? payload.coordinates ?? payload.center ?? payload.map?.coordinates ?? payload.location?.coordinates,
-    [-41.83, -9.45]
-  )
-
-  return {
-    regiao: payload.regiao || payload.region || payload.area || 'Northeast',
-    uf: payload.uf || payload.submarket || payload.state || 'NE',
-    horizonte: payload.horizonte || payload.horizon || 'D0 + D1',
-    curtailmentValue: parseNumber(payload.curtailmentValue ?? payload.curtailment ?? payload.curtailmentProbability, 72),
-    p10: parseNumber(payload.p10, 40),
-    p50: parseNumber(payload.p50, 58),
-    p90: parseNumber(payload.p90, 81),
-    energyRiskValue: parseNumber(payload.energyRiskValue ?? payload.energyAtRisk ?? payload.energyRisk ?? 216, 216),
-    energyRiskMwh: parseNumber(payload.energyRiskMwh ?? payload.energySpill ?? payload.energySpillMwh ?? 154, 154),
-    criticalWindow: payload.criticalWindow || payload.critical_window || '12:00 - 18:00',
-    mapCoordinates,
-    riskPoints: normalizeRiskPoints(payload.points ?? payload.riskPoints ?? payload.riskMap?.points),
-    resources: normalizeResources(payload.resources ?? payload.riskMap?.resources ?? payload.assets),
-    causeRows: Array.isArray(payload.causeRows)
-      ? payload.causeRows.map((row) => ({
-          label: row.label || row.name || 'Cause',
-          value: parseNumber(row.value, 0),
-          color: row.color || '#38bdf8',
-        }))
-      : defaultCauseRows,
-    riskEvolutionSeries: Array.isArray(payload.riskEvolutionSeries)
-      ? payload.riskEvolutionSeries.map((value) => parseNumber(value, 0))
-      : defaultRiskEvolutionSeries,
-    riskEvolutionPeak: payload.riskEvolutionPeak || payload.peak || defaultRiskEvolutionPeak,
-  }
-}
-
 function TelemetryPage() {
-  const [regiao, setRegiao] = useState('Northeast')
-  const [uf, setUf] = useState('NE')
-  const [horizonte, setHorizonte] = useState('D0 + D1')
+  // Estado consolidado: UM objeto normalizado (antes eram ~16 useState de dados).
+  const [data, setData] = useState(() => normalizeTelemetryPayload({}))
+  // Inputs do usuario ficam separados: a selecao de submercado NAO deve ser
+  // sobrescrita pelo polling a cada 10s.
+  const [uf, setUf] = useState(data.uf)
+  const [regiao, setRegiao] = useState(data.regiao)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [curtailmentValue, setCurtailmentValue] = useState(72)
-  const [p10, setP10] = useState(40)
-  const [p50, setP50] = useState(58)
-  const [p90, setP90] = useState(81)
-  const [energyRiskValue, setEnergyRiskValue] = useState(216)
-  const [energyRiskMwh, setEnergyRiskMwh] = useState(154)
-  const [criticalWindow, setCriticalWindow] = useState('12:00 - 18:00')
-  const [mapCoordinates, setCoordinates] = useState([-41.83, -9.45])
-  const [riskPoints, setRiskPoints] = useState(defaultRiskPoints)
-  const [mapResources, setMapResources] = useState(defaultMapResources)
-  const [causeRows, setCauseRows] = useState(defaultCauseRows)
-  const [riskEvolutionSeries, setRiskEvolutionSeries] = useState(defaultRiskEvolutionSeries)
-  const [riskEvolutionPeak, setRiskEvolutionPeak] = useState(defaultRiskEvolutionPeak)
+  // Loading das requisicoes: true ate o 1o payload (stream/fetch) chegar ou falhar.
+  const [isLoading, setIsLoading] = useState(true)
+
+  // Campos derivados do dado normalizado.
+  const horizonte = data.horizonte
+  const curtailmentValue = data.curtailmentValue
+  const p10 = data.p10
+  const p50 = data.p50
+  const p90 = data.p90
+  const energyRiskValue = data.energyRiskValue
+  const energyRiskMwh = data.energyRiskMwh
+  const criticalWindow = data.criticalWindow
+  const mapCoordinates = data.mapCoordinates
+  const criticalPoint = data.criticalPoint
+  const riskPoints = data.riskPoints
+  const mapResources = data.resources
+  const causeRows = data.causeRows
+  const riskEvolutionSeries = data.riskEvolutionSeries
+  const riskEvolutionPeak = data.riskEvolutionPeak
+  const transmissionLine = data.transmissionLine
+  const mitigation = data.mitigation
 
   const curtailmentChartRef = useRef(null)
+  const curtailmentChartInstanceRef = useRef(null)
 
   const isHighCurtailment = curtailmentValue > 60
-  const isHighEnergyRisk = energyRiskValue > 200
 
-  const applyTelemetryState = (payload) => {
-    const normalized = normalizeTelemetryPayload(payload)
+  // Ponto 2B: normalizacao pesada roda em Web Worker (fora da main thread).
+  const { normalized, normalize } = useNormalizedTelemetry()
 
-    setRegiao(normalized.regiao)
-    setUf(normalized.uf)
-    setHorizonte(normalized.horizonte)
-    setCurtailmentValue(normalized.curtailmentValue)
-    setP10(normalized.p10)
-    setP50(normalized.p50)
-    setP90(normalized.p90)
-    setEnergyRiskValue(normalized.energyRiskValue)
-    setEnergyRiskMwh(normalized.energyRiskMwh)
-    setCriticalWindow(normalized.criticalWindow)
-    setCoordinates(normalized.mapCoordinates)
-    setRiskPoints(normalized.riskPoints)
-    setMapResources(normalized.resources)
-    setCauseRows(normalized.causeRows)
-    setRiskEvolutionSeries(normalized.riskEvolutionSeries)
-    setRiskEvolutionPeak(normalized.riskEvolutionPeak)
+  // Ponto 1B: fetcher usado tanto no fallback de polling quanto no refresh manual.
+  // Corre os endpoints em paralelo (ponto 1A) e devolve o payload cru para o worker.
+  const fetchTelemetryPayload = async (config = {}) => {
+    const { data } = await fetchFirstAvailable(TELEMETRY_ENDPOINTS, { timeout: 30000, ...config })
+    return data
   }
 
-  const fetchTelemetry = async () => {
-    setIsRefreshing(true)
+  // Ponto 1B: stream em tempo real (SSE) com fallback de polling.
+  const { data: streamedPayload } = useTelemetryStream(TELEMETRY_STREAM_URL, fetchTelemetryPayload, {
+    pollIntervalMs: 10000,
+  })
 
-    try {
-      const response = await api.get('/data-telemetry')
-      applyTelemetryState(response.data)
-    } catch (error) {
-      console.warn('Telemetry endpoint not available: data-telemetry', error)
-    } finally {
-      setIsRefreshing(false)
-    }
-  }
-
+  // Cada payload cru (stream, polling ou refresh) e enviado ao worker para normalizar.
   useEffect(() => {
-    fetchTelemetry()
+    if (streamedPayload != null) normalize(streamedPayload)
+  }, [streamedPayload, normalize])
+
+  // Quando o worker devolve o objeto normalizado, aplicamos de uma vez (1 setState).
+  // uf/regiao NAO sao sobrescritos: sao controlados pela selecao do usuario.
+  useEffect(() => {
+    if (!normalized) return
+    setData(normalized)
+    setIsLoading(false)
+  }, [normalized])
+
+  // Loading inicial: garante que o skeleton NUNCA fique preso.
+  // O loading sempre encerra: no sucesso, na falha, e por um teto de tempo.
+  // Sem backend, os campos caem nos defaults ja presentes no estado.
+  useEffect(() => {
+    // Teto de seguranca independente do fetch: encerra o loading de qualquer jeito.
+    const safety = setTimeout(() => setIsLoading(false), 1500)
+
+    // Nao bloqueia a UI: roda em paralelo ao stream/polling.
+    fetchTelemetryPayload()
+      .then((payload) => normalize(payload))
+      .catch(() => {
+        // sem resposta: mantem defaults
+      })
+      .finally(() => setIsLoading(false))
+
+    return () => clearTimeout(safety)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Ponto 3: cria a instancia do ECharts UMA vez (mount) e so a atualiza depois.
   useEffect(() => {
-    if (!curtailmentChartRef.current) return
+    if (!curtailmentChartRef.current) return undefined
 
     const chart = echarts.init(curtailmentChartRef.current)
-    const primaryColor = isHighCurtailment ? '#ef4444' : '#22c55e'
+    curtailmentChartInstanceRef.current = chart
 
-    chart.setOption({
+    const handleResize = () => chart.resize()
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      chart.dispose()
+      curtailmentChartInstanceRef.current = null
+    }
+  }, [])
+
+  // Ponto 3 + memo estavel: monta a option so quando o valor relevante muda.
+  const curtailmentOption = useMemo(() => {
+    const primaryColor = isHighCurtailment ? '#ef4444' : '#22c55e'
+    return {
       backgroundColor: 'transparent',
       series: [
         {
@@ -246,39 +157,42 @@ function TelemetryPage() {
           startAngle: 90,
           avoidLabelOverlap: false,
           silent: true,
-          itemStyle: {
-            borderWidth: 0,
-          },
-          label: {
-            show: false,
-          },
-          labelLine: {
-            show: false,
-          },
+          itemStyle: { borderWidth: 0 },
+          label: { show: false },
+          labelLine: { show: false },
           data: [
             { value: curtailmentValue, name: 'Curtailment', itemStyle: { color: primaryColor } },
             { value: 100 - curtailmentValue, name: 'Rest', itemStyle: { color: 'rgba(255,255,255,0.08)' } },
           ],
         },
       ],
-    })
-
-    const handleResize = () => chart.resize()
-    window.addEventListener('resize', handleResize)
-
-    return () => {
-      window.removeEventListener('resize', handleResize)
-      chart.dispose()
     }
   }, [curtailmentValue, isHighCurtailment])
+
+  // Ponto 3: atualiza o grafico existente via setOption (merge/diff), sem recriar.
+  useEffect(() => {
+    curtailmentChartInstanceRef.current?.setOption(curtailmentOption)
+  }, [curtailmentOption])
 
   const handleDirectionChange = (value) => {
     setUf(value)
     setRegiao(regionMap[value] || 'North')
   }
 
-  const handleRefresh = () => {
-    fetchTelemetry()
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    // Piso de tempo para o icone completar ao menos um giro visivel,
+    // mesmo quando o fetch resolve/rejeita quase instantaneamente.
+    const minSpin = new Promise((resolve) => setTimeout(resolve, 700))
+    try {
+      const payload = await fetchTelemetryPayload()
+      normalize(payload)
+    } catch {
+      // nenhum endpoint respondeu: mantem o ultimo estado valido
+    } finally {
+      await minSpin
+      setIsRefreshing(false)
+    }
   }
 
   return (
@@ -335,16 +249,16 @@ function TelemetryPage() {
           <div className="curtailment-data">
             <div ref={curtailmentChartRef} className="donut-chart" />
             <div className="curtailment-values">
-              <h2>{curtailmentValue}%</h2>
+              <h2><Skeleton loading={isLoading} width={70} height={30}>{curtailmentValue}%</Skeleton></h2>
               <p className={isHighCurtailment ? 'danger-text' : 'safe-text'}>
                 {isHighCurtailment ? 'Critical risk threshold exceeded' : 'Below critical threshold'}
               </p>
             </div>
           </div>
           <div className="curtailment-metrics">
-            <p>P10: {p10}%</p>
-            <p>P50: {p50}%</p>
-            <p>P90: {p90}%</p>
+            <p>P10: <Skeleton loading={isLoading} width={28}>{p10}%</Skeleton></p>
+            <p>P50: <Skeleton loading={isLoading} width={28}>{p50}%</Skeleton></p>
+            <p>P90: <Skeleton loading={isLoading} width={28}>{p90}%</Skeleton></p>
           </div>
         </div>
 
@@ -360,15 +274,15 @@ function TelemetryPage() {
 
           <div className="energy-risk-value">
             <div className="watts-values">
-              <h1>{energyRiskValue}</h1>
+              <h1><Skeleton loading={isLoading} width={90} height={34}>{energyRiskValue}</Skeleton></h1>
               <p>MW</p>
             </div>
-            <p>{energyRiskMwh} MWh (Energy Spill)</p>
+            <p><Skeleton loading={isLoading} width={150}>{energyRiskMwh} MWh (Energy Spill)</Skeleton></p>
           </div>
 
           <div className="energy-risk-window">
             <p>Critical window:</p>
-            <h3>{criticalWindow}</h3>
+            <h3><Skeleton loading={isLoading} width={110}>{criticalWindow}</Skeleton></h3>
           </div>
         </div>
 
@@ -377,21 +291,21 @@ function TelemetryPage() {
             <div className="energy-risk-title-wrap">
               <h3>HIGHEST-RISK NODE</h3>
               <span className="highest-risk-icon-box" aria-label="highest risk icon">
-                <Zap className="highest-risk-icon" size={16} strokeWidth={2.5} />
+                <MapPin className="highest-risk-icon" size={16} strokeWidth={2.5} />
               </span>
             </div>
           </div>
 
           <div className="highest-risk-value">
             <div className="highest-risk-node">
-              <h1>{regiao}({uf})</h1>
+              <h1><Skeleton loading={isLoading} width={120} height={30}>{regiao}({uf})</Skeleton></h1>
             </div>
-            <p className="location">Sobradinho → Juazeiro 500kV</p>
+            <p className="location"><Skeleton loading={isLoading} width={170}>{transmissionLine}</Skeleton></p>
           </div>
 
           <div className="energy-risk-window impacted-assets">
             <p>Impacted Assets:</p>
-            <h3>12 Farms (8 Wind, 4 Solar)</h3>
+            <h3><Skeleton loading={isLoading} width={90}>{criticalPoint.affectedAssets} Farms</Skeleton></h3>
           </div>
         </div>
 
@@ -399,7 +313,7 @@ function TelemetryPage() {
           <div className="cause-header">
             <h3>PROBABLE CAUSE</h3>
             <span className="cause-icon-box" aria-label="probable cause icon">
-              <Zap className="cause-icon" size={16} strokeWidth={2.5} />
+              <TriangleAlert className="cause-icon" size={16} strokeWidth={2.5} />
             </span>
           </div>
 
@@ -428,6 +342,7 @@ function TelemetryPage() {
               value: String(point.value).endsWith('%') ? point.value : `${point.value}%`,
             }))}
             resources={mapResources}
+            criticalPoint={criticalPoint}
           />
         </div>
 
@@ -440,15 +355,15 @@ function TelemetryPage() {
           <div className="risk-detail-list">
             <div className="risk-detail-row">
               <span className="risk-detail-label">Curtailment Probability</span>
-              <strong className="risk-detail-value danger">{curtailmentValue}%</strong>
+              <strong className="risk-detail-value danger"><Skeleton loading={isLoading} width={40}>{curtailmentValue}%</Skeleton></strong>
             </div>
             <div className="risk-detail-row">
               <span className="risk-detail-label">Expected Volume</span>
-              <strong className="risk-detail-value">320 MW</strong>
+              <strong className="risk-detail-value"><Skeleton loading={isLoading} width={60}>{criticalPoint.volumeAtRisk} MW</Skeleton></strong>
             </div>
             <div className="risk-detail-row">
               <span className="risk-detail-label">Critical Window</span>
-              <strong className="risk-detail-value">{criticalWindow}</strong>
+              <strong className="risk-detail-value"><Skeleton loading={isLoading} width={90}>{criticalWindow}</Skeleton></strong>
             </div>
             <div className="risk-detail-row">
               <span className="risk-detail-label">Most Exposed Region</span>
@@ -460,7 +375,7 @@ function TelemetryPage() {
             </div>
             <div className="risk-detail-row">
               <span className="risk-detail-label">Affected Assets</span>
-              <strong className="risk-detail-value">12 Farms</strong>
+              <strong className="risk-detail-value"><Skeleton loading={isLoading} width={70}>{criticalPoint.affectedAssets} Farms</Skeleton></strong>
             </div>
           </div>
 
@@ -707,16 +622,42 @@ function TelemetryPage() {
           <aside className="mitigation-panel">
             <div className="mitigation-header">
               <span className="mitigation-badge">✓</span>
-              Recommened ISO dispatch action
+              Recommended ISO dispatch action
             </div>
 
-            <h4>Activate 180 MW of BESS between 13:30 and 16:45</h4>
+            <h4><Skeleton loading={isLoading} width={260}>{mitigation.action}</Skeleton></h4>
 
             <div className="mitigation-metrics">
-              <div><span>Curtailment without action:</span><strong>320 MW</strong></div>
-              <div><span>Curtailment after action:</span><strong>75 MW</strong></div>
-              <div><span>Energy potentially recovered:</span><strong>225 MWh</strong></div>
-              <div><span>Mitigation coverage:</span><strong>82%</strong></div>
+              <div className="mitigation-row">
+                <span className="mitigation-label">Curtailment without action:</span>
+                <strong className="mitigation-value danger">
+                  <Skeleton loading={isLoading} width={60}>{mitigation.curtailmentWithout} <small>MWh</small></Skeleton>
+                </strong>
+              </div>
+              <div className="mitigation-row">
+                <span className="mitigation-label">Curtailment after action:</span>
+                <strong className="mitigation-value success">
+                  <Skeleton loading={isLoading} width={60}>{mitigation.curtailmentAfter} <small>MWh</small></Skeleton>
+                </strong>
+              </div>
+              <div className="mitigation-row">
+                <span className="mitigation-label">Energy potentially recovered:</span>
+                <strong className="mitigation-value">
+                  <Skeleton loading={isLoading} width={60}>{mitigation.energyRecovered} <small>MWh</small></Skeleton>
+                </strong>
+              </div>
+              <div className="mitigation-row">
+                <span className="mitigation-label">Mitigation coverage:</span>
+                <strong className="mitigation-value warning">
+                  <Skeleton loading={isLoading} width={40}>{mitigation.coverage}<small>%</small></Skeleton>
+                </strong>
+              </div>
+              <div className="mitigation-row mitigation-row-divider">
+                <span className="mitigation-label">Resources required:</span>
+                <strong className="mitigation-value strong">
+                  <Skeleton loading={isLoading} width={220}>{mitigation.resourcesRequired}</Skeleton>
+                </strong>
+              </div>
             </div>
 
             <button type="button" className="simulate-button">Simulate mitigation →</button>

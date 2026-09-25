@@ -52,8 +52,8 @@ function Header({
   const location = useLocation()
   const navigate = useNavigate()
   const routeMode = location.pathname.startsWith('/telemetry') ? 'VPP' : 'MODELS'
-  const [selectedMode, setSelectedMode] = useState(routeMode)
-  const [latencyMs, setLatencyMs] = useState(initialLatency)
+  const [selectedMode, setSelectedMode] = useState(routeMode || defaultMode)
+  const [latencyMs] = useState(initialLatency)
   const [utcTime, setUtcTime] = useState(() => formatUtcDate(new Date()))
 
   useEffect(() => {
