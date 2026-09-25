@@ -1,7 +1,9 @@
 import './App.css'
+import { useEffect, useState } from 'react'
 import { Link, Route, Routes } from 'react-router-dom'
 import TelemetryPage from './pages/TelemetryPage'
 import Header from './components/header'
+import api from './services/api'
 import { ArrowRight, MonitorCog, Network, Play, Radar, Cpu, Server, Zap } from 'lucide-react'
 
 const architectureSteps = [
@@ -12,16 +14,109 @@ const architectureSteps = [
   { title: 'Output & Evaluation', detail: 'Validate model', status: 'Ready', tone: 'info' },
 ]
 
+const normalizeNumber = (value, fallback) => {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : fallback
+}
+
+const defaultHomePayload = {
+  baseForecast: 2400,
+  bestCase: 2880,
+  averageCase: 2400,
+  worstCase: 1980,
+  p10: 1850,
+  p50: 2400,
+  p90: 2960,
+  scenarios: 108,
+  curtailmentProbability: 78,
+  expectedVolume: '328 MW / 1,280 MWh',
+  highestRiskLocation: 'Northeast • Sobradinho',
+  criticalWindow: '13:30 — 16:45',
+  probableCause: 'Transmission (58%)',
+  generationForecast: { mae: 126, rmse: 188, mape: '8.4%' },
+  curtailmentOccurrence: { precision: 0.82, recall: 0.76, f1: 0.79 },
+  restrictedVolume: { mae: 95, rmse: 140, error: '12.6%' },
+  restrictionCause: { accuracy: 0.81, f1: 0.78, roc: 0.87 },
+  architectureSteps,
+}
+
 function HomePage() {
+  const [steps, setSteps] = useState(architectureSteps)
+  const [baseForecast, setBaseForecast] = useState(defaultHomePayload.baseForecast)
+  const [bestCase, setBestCase] = useState(defaultHomePayload.bestCase)
+  const [averageCase, setAverageCase] = useState(defaultHomePayload.averageCase)
+  const [worstCase, setWorstCase] = useState(defaultHomePayload.worstCase)
+  const [p10, setP10] = useState(defaultHomePayload.p10)
+  const [p50, setP50] = useState(defaultHomePayload.p50)
+  const [p90, setP90] = useState(defaultHomePayload.p90)
+  const [scenarios, setScenarios] = useState(defaultHomePayload.scenarios)
+  const [curtailmentProbability, setCurtailmentProbability] = useState(defaultHomePayload.curtailmentProbability)
+  const [expectedVolume, setExpectedVolume] = useState(defaultHomePayload.expectedVolume)
+  const [highestRiskLocation, setHighestRiskLocation] = useState(defaultHomePayload.highestRiskLocation)
+  const [criticalWindow, setCriticalWindow] = useState(defaultHomePayload.criticalWindow)
+  const [probableCause, setProbableCause] = useState(defaultHomePayload.probableCause)
+  const [generationForecast, setGenerationForecast] = useState(defaultHomePayload.generationForecast)
+  const [curtailmentOccurrence, setCurtailmentOccurrence] = useState(defaultHomePayload.curtailmentOccurrence)
+  const [restrictedVolume, setRestrictedVolume] = useState(defaultHomePayload.restrictedVolume)
+  const [restrictionCause, setRestrictionCause] = useState(defaultHomePayload.restrictionCause)
+
+  const applyHomeData = (payload = {}) => {
+    const feed = {
+      ...defaultHomePayload,
+      ...payload,
+      generationForecast: { ...defaultHomePayload.generationForecast, ...(payload.generationForecast || payload.forecast || {}) },
+      curtailmentOccurrence: { ...defaultHomePayload.curtailmentOccurrence, ...(payload.curtailmentOccurrence || payload.curtailment || {}) },
+      restrictedVolume: { ...defaultHomePayload.restrictedVolume, ...(payload.restrictedVolume || payload.volume || {}) },
+      restrictionCause: { ...defaultHomePayload.restrictionCause, ...(payload.restrictionCause || payload.cause || {}) },
+    }
+
+    setSteps(Array.isArray(feed.architectureSteps) && feed.architectureSteps.length ? feed.architectureSteps : architectureSteps)
+    setBaseForecast(normalizeNumber(feed.baseForecast ?? feed.generation?.baseForecast, defaultHomePayload.baseForecast))
+    setBestCase(normalizeNumber(feed.bestCase ?? feed.generation?.bestCase, defaultHomePayload.bestCase))
+    setAverageCase(normalizeNumber(feed.averageCase ?? feed.generation?.averageCase, defaultHomePayload.averageCase))
+    setWorstCase(normalizeNumber(feed.worstCase ?? feed.generation?.worstCase, defaultHomePayload.worstCase))
+    setP10(normalizeNumber(feed.p10 ?? feed.generation?.p10, defaultHomePayload.p10))
+    setP50(normalizeNumber(feed.p50 ?? feed.generation?.p50, defaultHomePayload.p50))
+    setP90(normalizeNumber(feed.p90 ?? feed.generation?.p90, defaultHomePayload.p90))
+    setScenarios(normalizeNumber(feed.scenarios ?? feed.generation?.scenarios, defaultHomePayload.scenarios))
+    setCurtailmentProbability(normalizeNumber(feed.curtailmentProbability ?? feed.curtailment?.probability, defaultHomePayload.curtailmentProbability))
+    setExpectedVolume(String(feed.expectedVolume ?? feed.curtailment?.expectedVolume ?? defaultHomePayload.expectedVolume))
+    setHighestRiskLocation(String(feed.highestRiskLocation ?? feed.location ?? defaultHomePayload.highestRiskLocation))
+    setCriticalWindow(String(feed.criticalWindow ?? feed.window ?? defaultHomePayload.criticalWindow))
+    setProbableCause(String(feed.probableCause ?? feed.cause ?? defaultHomePayload.probableCause))
+    setGenerationForecast(feed.generationForecast)
+    setCurtailmentOccurrence(feed.curtailmentOccurrence)
+    setRestrictedVolume(feed.restrictedVolume)
+    setRestrictionCause(feed.restrictionCause)
+  }
+
+  const fetchHomeData = async () => {
+    const endpoints = ['data-models', 'data-telemetry', '/api/models', '/api/home', '/api/dashboard']
+
+    for (const endpoint of endpoints) {
+      try {
+        const response = await api.get(endpoint)
+        applyHomeData(response.data)
+        return
+      } catch (error) {
+        console.warn(`Main page endpoint not available: ${endpoint}`, error)
+      }
+    }
+  }
+
+  useEffect(() => {
+    fetchHomeData()
+  }, [])
+
   return (
     <div className="home-app-shell">
       <Header
         system_status="online"
         initialLatency={18}
         title="ORÁCULO"
-        dispatchText="VPP CORE"
+        dispatchText="ISO DISPATCH V4.18"
         modeOptions={['VPP', 'MODELS']}
-        defaultMode="VPP"
+        defaultMode="MODELS"
       />
 
       <div className="home-toolbar">
@@ -45,9 +140,7 @@ function HomePage() {
           </label>
         </div>
 
-        <button type="button" className="telemetry-button">
-          <Link to="/telemetry">Telemetry</Link>
-        </button>
+        
       </div>
 
       <main className="home-main-wrapper">
@@ -65,7 +158,7 @@ function HomePage() {
           </div>
 
           <div className="pipeline-steps">
-            {architectureSteps.map((step, index) => (
+            {steps.map((step, index) => (
               <div className={`pipeline-card ${step.tone}`} key={step.title}>
                 <div className="pipeline-card-header">
                   <span className="step-number">{index + 1}</span>
@@ -85,14 +178,9 @@ function HomePage() {
               </div>
             ))}
           </div>
-        </section>
-
-        <section className="home-panel panel-forecast">
+          <section className="home-panel panel-forecast">
           <div className="panel-header-grid compact">
-            <div className="panel-title-wrap">
-              <span className="panel-bullet" />
-              <span>Simulation Output — Generation Forecast</span>
-            </div>
+            
             <div className="panel-legend">
               <span><em>P90</em></span>
               <span><em>P50</em></span>
@@ -124,43 +212,46 @@ function HomePage() {
               <div className="metrics-grid">
                 <div className="metric-box">
                   <span>Base Forecast</span>
-                  <strong>2,400 MW</strong>
+                  <strong>{baseForecast.toLocaleString()} MW</strong>
                 </div>
                 <div className="metric-box cyan">
                   <span>Best Case</span>
-                  <strong>2,880 MW</strong>
+                  <strong>{bestCase.toLocaleString()} MW</strong>
                 </div>
                 <div className="metric-box amber">
                   <span>Average Case</span>
-                  <strong>2,400 MW</strong>
+                  <strong>{averageCase.toLocaleString()} MW</strong>
                 </div>
                 <div className="metric-box red">
                   <span>Worst Case</span>
-                  <strong>1,980 MW</strong>
+                  <strong>{worstCase.toLocaleString()} MW</strong>
                 </div>
               </div>
 
               <div className="mini-stat-row">
                 <div className="mini-stat">
                   <span>P10</span>
-                  <strong>1,850 MW</strong>
+                  <strong>{p10.toLocaleString()} MW</strong>
                 </div>
                 <div className="mini-stat">
                   <span>P50</span>
-                  <strong>2,400 MW</strong>
+                  <strong>{p50.toLocaleString()} MW</strong>
                 </div>
                 <div className="mini-stat">
                   <span>P90</span>
-                  <strong>2,960 MW</strong>
+                  <strong>{p90.toLocaleString()} MW</strong>
                 </div>
                 <div className="mini-stat">
                   <span>Scenarios</span>
-                  <strong>108</strong>
+                  <strong>{scenarios}</strong>
                 </div>
               </div>
             </div>
           </div>
+         </section>
         </section>
+
+        
 
         <section className="home-panel model-two-panel">
           <div className="model-panel-header">
@@ -256,11 +347,11 @@ function HomePage() {
               <div className="summary-kpi-grid">
                 <div className="summary-kpi danger">
                   <div className="kpi-ring">
-                    <span>78%</span>
+                    <span>{curtailmentProbability}%</span>
                   </div>
                   <div className="kpi-copy">
                     <strong>Curtailment Probability</strong>
-                    <small>78% severe</small>
+                    <small>{curtailmentProbability}% severe</small>
                   </div>
                 </div>
 
@@ -268,7 +359,7 @@ function HomePage() {
                   <span className="box-icon">◌</span>
                   <div className="box-copy">
                     <strong>Expected Volume</strong>
-                    <small>328 MW / 1,280 MWh</small>
+                    <small>{expectedVolume}</small>
                   </div>
                 </div>
 
@@ -276,8 +367,7 @@ function HomePage() {
                   <span className="box-icon">◌</span>
                   <div className="box-copy">
                     <strong>Highest-Risk Location</strong>
-                    <small>Northeast</small>
-                    <small>Sobradinho</small>
+                    <small>{highestRiskLocation}</small>
                   </div>
                 </div>
               </div>
@@ -285,11 +375,11 @@ function HomePage() {
               <div className="cause-summary-box">
                 <div className="cause-summary-row">
                   <span>Critical Window</span>
-                  <strong>13:30 — 16:45</strong>
+                  <strong>{criticalWindow}</strong>
                 </div>
                 <div className="cause-summary-row">
                   <span>Probable Cause</span>
-                  <strong>Transmission (58%)</strong>
+                  <strong>{probableCause}</strong>
                 </div>
               </div>
             </aside>
@@ -317,9 +407,9 @@ function HomePage() {
                 <span className="dot green" />
               </div>
               <ul>
-                <li><strong>MAE</strong><span>126 MW</span></li>
-                <li><strong>RMSE</strong><span>188 MW</span></li>
-                <li><strong>MAPE</strong><span>8.4%</span></li>
+                <li><strong>MAE</strong><span>{generationForecast.mae} MW</span></li>
+                <li><strong>RMSE</strong><span>{generationForecast.rmse} MW</span></li>
+                <li><strong>MAPE</strong><span>{generationForecast.mape}</span></li>
               </ul>
             </div>
 
@@ -329,9 +419,9 @@ function HomePage() {
                 <span className="dot red" />
               </div>
               <ul>
-                <li><strong>Precision</strong><span>0.82</span></li>
-                <li><strong>Recall</strong><span>0.76</span></li>
-                <li><strong>F1-Score</strong><span>0.79</span></li>
+                <li><strong>Precision</strong><span>{curtailmentOccurrence.precision}</span></li>
+                <li><strong>Recall</strong><span>{curtailmentOccurrence.recall}</span></li>
+                <li><strong>F1-Score</strong><span>{curtailmentOccurrence.f1}</span></li>
               </ul>
             </div>
 
@@ -341,9 +431,9 @@ function HomePage() {
                 <span className="dot yellow" />
               </div>
               <ul>
-                <li><strong>MAE</strong><span>95 MWh</span></li>
-                <li><strong>RMSE</strong><span>140 MWh</span></li>
-                <li><strong>% Error</strong><span>12.6%</span></li>
+                <li><strong>MAE</strong><span>{restrictedVolume.mae} MWh</span></li>
+                <li><strong>RMSE</strong><span>{restrictedVolume.rmse} MWh</span></li>
+                <li><strong>% Error</strong><span>{restrictedVolume.error}</span></li>
               </ul>
             </div>
 
@@ -353,9 +443,9 @@ function HomePage() {
                 <span className="dot blue" />
               </div>
               <ul>
-                <li><strong>Accuracy</strong><span>0.81</span></li>
-                <li><strong>F1-Score (avg)</strong><span>0.78</span></li>
-                <li><strong>ROC-AUC</strong><span>0.87</span></li>
+                <li><strong>Accuracy</strong><span>{restrictionCause.accuracy}</span></li>
+                <li><strong>F1-Score (avg)</strong><span>{restrictionCause.f1}</span></li>
+                <li><strong>ROC-AUC</strong><span>{restrictionCause.roc}</span></li>
               </ul>
             </div>
           </div>

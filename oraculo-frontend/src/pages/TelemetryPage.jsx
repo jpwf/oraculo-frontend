@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { RefreshCw, Zap } from 'lucide-react'
 import * as echarts from 'echarts'
+import api from '../services/api'
 
 const directionOptions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
 
@@ -18,6 +19,31 @@ const regionMap = {
   W: 'West',
   NW: 'Northwest',
 }
+
+const defaultRiskPoints = [
+  { label: 'High Risk', value: '78%', color: '#ef4444' },
+  { label: 'Medium Risk', value: '42%', color: '#f59e0b' },
+  { label: 'Low Risk', value: '18%', color: '#38bdf8' },
+]
+
+const defaultMapResources = [
+  { type: 'WIND', name: 'Wind Farm 1', quantity: 180, coordinates: [-40.1, -11.5], color: '#38bdf8' },
+  { type: 'WIND', name: 'Wind Farm 2', quantity: 150, coordinates: [-39.2, -9.8], color: '#38bdf8' },
+  { type: 'SOLAR_PLANT', name: 'Solar Plant 1', quantity: 210, coordinates: [-38.5, -3.7], color: '#f59e0b' },
+  { type: 'SOLAR_PLANT', name: 'Solar Plant 2', quantity: 140, coordinates: [-41.1, -7.4], color: '#f59e0b' },
+  { type: 'MMGD', name: 'MMGD 1', quantity: 95, coordinates: [-42.5, -12.8], color: '#34d399' },
+  { type: 'BESS', name: 'BESS 1', quantity: 120, coordinates: [-39.8, -8.9], color: '#a78bfa' },
+]
+
+const defaultCauseRows = [
+  { label: 'Transmission', value: 58, color: '#ff5a5a' },
+  { label: 'Electrical', value: 24, color: '#4ecae6' },
+  { label: 'Energy', value: 12, color: '#f5b94b' },
+  { label: 'Other', value: 6, color: '#a7b0bf' },
+]
+
+const defaultRiskEvolutionSeries = [5, 18, 28, 45, 62, 78, 82, 64, 42, 22, 10, 6]
+const defaultRiskEvolutionPeak = { time: '14:15', value: 82 }
 
 const formatUtcDate = (date) => {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -38,7 +64,109 @@ const formatUtcDate = (date) => {
   return `${values.month} ${values.day}, ${values.year} ${values.hour}:${values.minute}:${values.second} UTC`
 }
 
+const parseNumber = (value, fallback = 0) => {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : fallback
+}
 
+const parseCoordinates = (value, fallback = [-41.83, -9.45]) => {
+  if (Array.isArray(value) && value.length >= 2) {
+    const lon = Number(value[0])
+    const lat = Number(value[1])
+    if (Number.isFinite(lon) && Number.isFinite(lat)) {
+      return [lon, lat]
+    }
+  }
+
+  if (value && typeof value === 'object') {
+    const lon = Number(value.lon ?? value.lng ?? value.longitude ?? value.x)
+    const lat = Number(value.lat ?? value.latitude ?? value.y)
+    if (Number.isFinite(lon) && Number.isFinite(lat)) {
+      return [lon, lat]
+    }
+  }
+
+  if (typeof value === 'string' && value.includes(',')) {
+    const [lon, lat] = value.split(',').map((item) => Number(item.trim()))
+    if (Number.isFinite(lon) && Number.isFinite(lat)) {
+      return [lon, lat]
+    }
+  }
+
+  return fallback
+}
+
+const normalizeRiskPoints = (source) => {
+  if (!Array.isArray(source) || source.length === 0) return defaultRiskPoints
+
+  return source.map((point) => ({
+    label: point?.label || point?.name || 'Risk',
+    value: `${point?.value ?? point?.probability ?? 0}%`,
+    color: point?.color || '#38bdf8',
+  }))
+}
+
+const normalizeResources = (source) => {
+  const resourceList = Array.isArray(source) ? source : source ? Object.values(source).flat() : defaultMapResources
+
+  if (!Array.isArray(resourceList) || resourceList.length === 0) {
+    return defaultMapResources
+  }
+
+  return resourceList
+    .map((resource) => {
+      if (!resource || typeof resource !== 'object') return null
+
+      const type = String(resource.type || resource.kind || resource.category || 'DEFAULT').toUpperCase()
+      const coordinates = parseCoordinates(resource.coordinates ?? resource.coords ?? resource.position ?? resource.point ?? resource.location)
+
+      if (!coordinates) return null
+
+      return {
+        ...resource,
+        type,
+        name: resource.name || resource.label || resource.asset || type,
+        quantity: parseNumber(resource.quantity ?? resource.capacity ?? resource.mw ?? resource.amount ?? 1, 1),
+        coordinates,
+        color: resource.color || '#38bdf8',
+      }
+    })
+    .filter(Boolean)
+}
+
+const normalizeTelemetryPayload = (payload = {}) => {
+  const mapCoordinates = parseCoordinates(
+    payload.mapCoordinates ?? payload.coordinates ?? payload.center ?? payload.map?.coordinates ?? payload.location?.coordinates,
+    [-41.83, -9.45]
+  )
+
+  return {
+    regiao: payload.regiao || payload.region || payload.area || 'Northeast',
+    uf: payload.uf || payload.submarket || payload.state || 'NE',
+    horizonte: payload.horizonte || payload.horizon || 'D0 + D1',
+    curtailmentValue: parseNumber(payload.curtailmentValue ?? payload.curtailment ?? payload.curtailmentProbability, 72),
+    p10: parseNumber(payload.p10, 40),
+    p50: parseNumber(payload.p50, 58),
+    p90: parseNumber(payload.p90, 81),
+    energyRiskValue: parseNumber(payload.energyRiskValue ?? payload.energyAtRisk ?? payload.energyRisk ?? 216, 216),
+    energyRiskMwh: parseNumber(payload.energyRiskMwh ?? payload.energySpill ?? payload.energySpillMwh ?? 154, 154),
+    criticalWindow: payload.criticalWindow || payload.critical_window || '12:00 - 18:00',
+    mapCoordinates,
+    riskPoints: normalizeRiskPoints(payload.points ?? payload.riskPoints ?? payload.riskMap?.points),
+    resources: normalizeResources(payload.resources ?? payload.riskMap?.resources ?? payload.assets),
+    causeRows: Array.isArray(payload.causeRows)
+      ? payload.causeRows.map((row) => ({
+          label: row.label || row.name || 'Cause',
+          value: parseNumber(row.value, 0),
+          color: row.color || '#38bdf8',
+        }))
+      : defaultCauseRows,
+    riskEvolutionSeries: Array.isArray(payload.riskEvolutionSeries)
+      ? payload.riskEvolutionSeries.map((value) => parseNumber(value, 0))
+      : defaultRiskEvolutionSeries,
+    riskEvolutionPeak: payload.riskEvolutionPeak || payload.peak || defaultRiskEvolutionPeak,
+  }
+}
 
 function TelemetryPage() {
   const [regiao, setRegiao] = useState('Northeast')
@@ -52,21 +180,55 @@ function TelemetryPage() {
   const [energyRiskValue, setEnergyRiskValue] = useState(216)
   const [energyRiskMwh, setEnergyRiskMwh] = useState(154)
   const [criticalWindow, setCriticalWindow] = useState('12:00 - 18:00')
-  const curtailmentChartRef = useRef(null)
   const [mapCoordinates, setCoordinates] = useState([-41.83, -9.45])
+  const [riskPoints, setRiskPoints] = useState(defaultRiskPoints)
+  const [mapResources, setMapResources] = useState(defaultMapResources)
+  const [causeRows, setCauseRows] = useState(defaultCauseRows)
+  const [riskEvolutionSeries, setRiskEvolutionSeries] = useState(defaultRiskEvolutionSeries)
+  const [riskEvolutionPeak, setRiskEvolutionPeak] = useState(defaultRiskEvolutionPeak)
+
+  const curtailmentChartRef = useRef(null)
 
   const isHighCurtailment = curtailmentValue > 60
   const isHighEnergyRisk = energyRiskValue > 200
 
-  const causeRows = [
-    { label: 'Transmission', value: 58, color: '#ff5a5a' },
-    { label: 'Electrical', value: 24, color: '#4ecae6' },
-    { label: 'Energy', value: 12, color: '#f5b94b' },
-    { label: 'Other', value: 6, color: '#a7b0bf' },
-  ]
+  const applyTelemetryState = (payload) => {
+    const normalized = normalizeTelemetryPayload(payload)
 
-  const riskEvolutionSeries = [5, 18, 28, 45, 62, 78, 82, 64, 42, 22, 10, 6]
-  const riskEvolutionPeak = { time: '14:15', value: 82 }
+    setRegiao(normalized.regiao)
+    setUf(normalized.uf)
+    setHorizonte(normalized.horizonte)
+    setCurtailmentValue(normalized.curtailmentValue)
+    setP10(normalized.p10)
+    setP50(normalized.p50)
+    setP90(normalized.p90)
+    setEnergyRiskValue(normalized.energyRiskValue)
+    setEnergyRiskMwh(normalized.energyRiskMwh)
+    setCriticalWindow(normalized.criticalWindow)
+    setCoordinates(normalized.mapCoordinates)
+    setRiskPoints(normalized.riskPoints)
+    setMapResources(normalized.resources)
+    setCauseRows(normalized.causeRows)
+    setRiskEvolutionSeries(normalized.riskEvolutionSeries)
+    setRiskEvolutionPeak(normalized.riskEvolutionPeak)
+  }
+
+  const fetchTelemetry = async () => {
+    setIsRefreshing(true)
+
+    try {
+      const response = await api.get('/data-telemetry')
+      applyTelemetryState(response.data)
+    } catch (error) {
+      console.warn('Telemetry endpoint not available: data-telemetry', error)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchTelemetry()
+  }, [])
 
   useEffect(() => {
     if (!curtailmentChartRef.current) return
@@ -116,13 +278,18 @@ function TelemetryPage() {
   }
 
   const handleRefresh = () => {
-    setIsRefreshing(true)
-    window.setTimeout(() => setIsRefreshing(false), 700)
+    fetchTelemetry()
   }
 
   return (
     <>
-      <Header system_status="online" />
+      <Header
+        system_status="online"
+        title="ORÁCULO"
+        dispatchText="VPP CORE"
+        modeOptions={['VPP', 'MODELS']}
+        defaultMode="VPP"
+      />
 
       <div className="system-infos">
         <div className="left-sub-header">
@@ -154,10 +321,6 @@ function TelemetryPage() {
               Refresh Telemetry
             </button>
           </div>
-
-          <Link to="/" className="route-link-button">
-            Home
-          </Link>
         </div>
       </div>
 
@@ -260,19 +423,11 @@ function TelemetryPage() {
         <div className="risk-map">
           <RiskMap
             coordinates={mapCoordinates}
-            points={[
-              { label: 'High Risk', value: `${curtailmentValue}%`, color: '#ef4444' },
-              { label: 'Medium Risk', value: `${p50}%`, color: '#f59e0b' },
-              { label: 'Low Risk', value: `${p10}%`, color: '#38bdf8' },
-            ]}
-            resources={[
-              { type: 'WIND', name: 'Wind Farm 1', coordinates: [-40.1, -11.5], color: '#38bdf8' },
-              { type: 'WIND', name: 'Wind Farm 2', coordinates: [-39.2, -9.8], color: '#38bdf8' },
-              { type: 'SOLAR_PLANT', name: 'Solar Plant 1', coordinates: [-38.5, -3.7], color: '#f59e0b' },
-              { type: 'SOLAR_PLANT', name: 'Solar Plant 2', coordinates: [-41.1, -7.4], color: '#f59e0b' },
-              { type: 'MMGD', name: 'MMGD 1', coordinates: [-42.5, -12.8], color: '#34d399' },
-              { type: 'BESS', name: 'BESS 1', coordinates: [-39.8, -8.9], color: '#a78bfa' },
-            ]}
+            points={riskPoints.map((point) => ({
+              ...point,
+              value: String(point.value).endsWith('%') ? point.value : `${point.value}%`,
+            }))}
+            resources={mapResources}
           />
         </div>
 

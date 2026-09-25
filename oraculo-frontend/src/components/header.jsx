@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import './components.css'
+import logo from '../../public/logo.svg'
 
 const formatUtcDate = (date) => {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -38,7 +40,7 @@ function Header({
   system_status = 'online',
   initialLatency = 18,
   title = 'ORÁCULO',
-  dispatchText = 'ISO DISPATCH V4.18',
+  dispatchText = '',
   modeOptions = ['VPP', 'MODELS'],
   defaultMode = 'VPP',
   showDispatch = true,
@@ -47,9 +49,16 @@ function Header({
   showLatency = true,
   showUtc = true,
 }) {
-  const [selectedMode, setSelectedMode] = useState(defaultMode)
+  const location = useLocation()
+  const navigate = useNavigate()
+  const routeMode = location.pathname.startsWith('/telemetry') ? 'VPP' : 'MODELS'
+  const [selectedMode, setSelectedMode] = useState(routeMode)
   const [latencyMs, setLatencyMs] = useState(initialLatency)
   const [utcTime, setUtcTime] = useState(() => formatUtcDate(new Date()))
+
+  useEffect(() => {
+    setSelectedMode(routeMode)
+  }, [routeMode])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -61,10 +70,27 @@ function Header({
 
   const statusMeta = getStatusMeta(system_status)
 
+  const handleModeChange = (option) => {
+    setSelectedMode(option)
+
+    if (option === 'VPP') {
+      navigate('/telemetry')
+      return
+    }
+
+    navigate('/')
+  }
+
   return (
     <header className="header">
       <div className="left-side">
-        <p>logo</p>
+        <img 
+      src={logo} 
+      alt="Logo do Projeto" 
+      width={40} 
+      height={40} 
+      className="my-custom-class" 
+    />
         <h2>{title}</h2>
 
         {showDispatch && (
@@ -80,7 +106,7 @@ function Header({
                 key={option}
                 type="button"
                 className={`switch-button ${selectedMode === option ? 'selected' : ''}`}
-                onClick={() => setSelectedMode(option)}
+                onClick={() => handleModeChange(option)}
               >
                 {option}
               </button>
