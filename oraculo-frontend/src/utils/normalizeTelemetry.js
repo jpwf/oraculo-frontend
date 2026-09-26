@@ -38,6 +38,56 @@ export const defaultCriticalPoint = {
 // Linha de transmissao exibida no card "Highest-Risk Node".
 export const defaultTransmissionLine = 'Sobradinho → Juazeiro 500kV'
 
+// Zonas de risco desenhadas SOBRE o mapa (poligonos georreferenciados,
+// equivalentes a um "shapefile" de areas). Cada zona: lista de [lon, lat],
+// um nivel de severidade e um rotulo. Cores default por nivel abaixo.
+export const riskZoneColors = {
+  HIGH: '#ef4444',
+  MEDIUM: '#f59e0b',
+  LOW: '#38bdf8',
+  DEFAULT: '#94a3b8',
+}
+
+export const defaultRiskZones = [
+  {
+    id: 'ne-sobradinho',
+    label: 'Zona Crítica NE — Sobradinho',
+    level: 'HIGH',
+    curtailmentProb: 78,
+    polygon: [
+      [-41.6, -8.4],
+      [-39.6, -8.2],
+      [-38.9, -9.6],
+      [-40.1, -10.9],
+      [-41.9, -10.2],
+    ],
+  },
+  {
+    id: 'oeste-ba',
+    label: 'Oeste BA — Atenção',
+    level: 'MEDIUM',
+    curtailmentProb: 45,
+    polygon: [
+      [-43.4, -10.6],
+      [-42.0, -10.8],
+      [-42.2, -12.4],
+      [-43.6, -12.2],
+    ],
+  },
+  {
+    id: 'litoral-ce',
+    label: 'Litoral CE — Baixo risco',
+    level: 'LOW',
+    curtailmentProb: 18,
+    polygon: [
+      [-39.4, -5.6],
+      [-37.8, -5.4],
+      [-38.0, -6.8],
+      [-39.6, -6.6],
+    ],
+  },
+]
+
 // Bloco "Recommended ISO dispatch action".
 export const defaultMitigation = {
   action: 'Activate 180 MW of BESS between 13:30 and 16:45',
@@ -88,6 +138,40 @@ export const normalizeRiskPoints = (source) => {
     value: `${point?.value ?? point?.probability ?? 0}%`,
     color: point?.color || '#38bdf8',
   }))
+}
+
+// Normaliza zonas de risco (poligonos) vindas do payload; cai nos defaults
+// se nao houver zonas validas. Cada poligono e uma lista de [lon, lat].
+export const normalizeRiskZones = (source) => {
+  if (!Array.isArray(source) || source.length === 0) return defaultRiskZones
+
+  const zones = source
+    .map((zone, index) => {
+      if (!zone || typeof zone !== 'object') return null
+
+      const rawPolygon = zone.polygon ?? zone.coordinates ?? zone.coords ?? zone.points
+      if (!Array.isArray(rawPolygon) || rawPolygon.length < 3) return null
+
+      const polygon = rawPolygon
+        .map((pt) => parseCoordinates(pt, null))
+        .filter((pt) => Array.isArray(pt))
+
+      if (polygon.length < 3) return null
+
+      const level = String(zone.level ?? zone.severity ?? 'DEFAULT').toUpperCase()
+
+      return {
+        id: String(zone.id ?? zone.key ?? `zone-${index}`),
+        label: String(zone.label ?? zone.name ?? `Zone ${index + 1}`),
+        level,
+        curtailmentProb: parseNumber(zone.curtailmentProb ?? zone.probability ?? zone.value, 0),
+        color: zone.color || riskZoneColors[level] || riskZoneColors.DEFAULT,
+        polygon,
+      }
+    })
+    .filter(Boolean)
+
+  return zones.length ? zones : defaultRiskZones
 }
 
 export const normalizeResources = (source) => {
@@ -217,6 +301,7 @@ export const normalizeTelemetryPayload = (payload = {}) => {
     mapCoordinates,
     criticalPoint,
     riskPoints: normalizeRiskPoints(payload.points ?? payload.riskPoints ?? payload.riskMap?.points),
+    riskZones: normalizeRiskZones(payload.riskZones ?? payload.zones ?? payload.riskMap?.zones),
     resources,
     causeRows: Array.isArray(payload.causeRows)
       ? payload.causeRows.map((row) => ({

@@ -68,6 +68,7 @@ function TelemetryPage() {
   const mapCoordinates = data.mapCoordinates
   const criticalPoint = data.criticalPoint
   const riskPoints = data.riskPoints
+  const riskZones = data.riskZones
   const mapResources = data.resources
   const causeRows = data.causeRows
   const riskEvolutionSeries = data.riskEvolutionSeries
@@ -343,6 +344,7 @@ function TelemetryPage() {
             }))}
             resources={mapResources}
             criticalPoint={criticalPoint}
+            riskZones={riskZones}
           />
         </div>
 

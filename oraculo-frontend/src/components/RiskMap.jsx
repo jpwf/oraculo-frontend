@@ -101,7 +101,7 @@ const normalizeResources = (source) => {
     });
 };
 
-export default function RiskMap({ coordinates, points = [], resources = [], criticalPoint = null }) {
+export default function RiskMap({ coordinates, points = [], resources = [], criticalPoint = null, riskZones = [] }) {
   const mapRef = useRef(null);
   const chartInstanceRef = useRef(null);
   const [loading, setLoading] = useState(true);
@@ -192,6 +192,25 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
       })
       .filter(Boolean);
   }, [resourceList]);
+
+  // Zonas de risco (poligonos) validas para desenhar sobre o mapa.
+  const zoneList = useMemo(() => {
+    return (Array.isArray(riskZones) ? riskZones : [])
+      .map((zone) => {
+        const polygon = (zone.polygon || [])
+          .map((pt) => normalizeCoordinates(pt))
+          .filter((pt) => Array.isArray(pt) && pt.length >= 2);
+        if (polygon.length < 3) return null;
+        return { ...zone, polygon };
+      })
+      .filter(Boolean);
+  }, [riskZones]);
+
+  // Dados da custom series de zonas (memoizado para nao recriar a cada render).
+  const zoneData = useMemo(
+    () => zoneList.map((zone) => ({ name: zone.label, value: zone.curtailmentProb, zone })),
+    [zoneList]
+  );
 
   // Ponto 3: cria a instancia do ECharts e registra o mapa do Brasil UMA vez.
   // O GeoJSON so e carregado/registrado uma vez; a instancia nunca e recriada.
@@ -306,8 +325,61 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
 
     const [critLon, critLat] = critical.coordinates;
 
+    // Zonas de risco (poligonos "shapefile") desenhadas sobre o geo via custom series.
+    const hexToRgba = (hex, alpha) => {
+      const h = String(hex).replace('#', '');
+      const r = parseInt(h.substring(0, 2), 16);
+      const g = parseInt(h.substring(2, 4), 16);
+      const b = parseInt(h.substring(4, 6), 16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    };
+
+    const zoneSeries = {
+      name: 'Zonas de Risco',
+      type: 'custom',
+      coordinateSystem: 'geo',
+      z: 2,
+      data: zoneData,
+      renderItem: (params, api) => {
+        const zone = zoneList[params.dataIndex];
+        if (!zone) return null;
+        const pts = zone.polygon.map((c) => api.coord(c));
+        if (!pts.length) return null;
+        const color = zone.color || '#94a3b8';
+        return {
+          type: 'polygon',
+          shape: { points: pts },
+          style: {
+            fill: hexToRgba(color, 0.18),
+            stroke: color,
+            lineWidth: 1.5,
+            lineDash: [6, 4],
+          },
+          emphasis: { style: { fill: hexToRgba(color, 0.32) } },
+        };
+      },
+      tooltip: {
+        show: true,
+        formatter: (params) => {
+          const zone = params?.data?.zone || {};
+          const color = zone.color || '#94a3b8';
+          return `
+            <div style="min-width:160px;">
+              <div style="font-weight:700;color:#f8fafc;margin-bottom:4px;">
+                <span style="color:${color};">▰</span> ${zone.label || 'Zone'}
+              </div>
+              <div style="display:flex;justify-content:space-between;color:#8ea1b8;font-size:12px;">
+                <span>Curtailment Prob.:</span>
+                <strong style="color:${color};">${zone.curtailmentProb ?? 0}%</strong>
+              </div>
+            </div>`;
+        },
+      },
+    };
+
     chart.setOption({
       series: [
+        zoneSeries,
         {
           type: 'lines',
           coordinateSystem: 'geo',
@@ -362,8 +434,8 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
           },
         },
       ],
-    });
-  }, [safeLon, safeLat, resourceScatterData, critical, chartReady]);
+    }, { replaceMerge: 'series' });
+  }, [safeLon, safeLat, resourceScatterData, critical, chartReady, zoneList, zoneData]);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: '190px', backgroundColor: '#070c14', borderRadius: '8px', display: 'flex', flexDirection: 'column' }}>
