@@ -99,17 +99,7 @@ function HomePage() {
         <div className="left-sub-header">
           <h3 className="region">Region: {regiao}({uf})</h3>
 
-          <label className="field uf-field">
-            <span>Submarket:</span>
-            <select className="uf" value={uf} onChange={(event) => handleSubmarketChange(event.target.value)}>
-              {submarketOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
-
+         
           <h3 className="horizon">Horizon: {horizonte} </h3>
         </div>
       </div>

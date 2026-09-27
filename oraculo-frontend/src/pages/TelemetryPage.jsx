@@ -188,16 +188,7 @@ function TelemetryPage() {
         <div className="left-sub-header">
           <h3 className="region">Region: {regiao}({uf})</h3>
 
-          <label className="field uf-field">
-            <span>Submarket:</span>
-            <select className="uf" value={uf} onChange={(event) => handleDirectionChange(event.target.value)}>
-              {directionOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
+         
 
           <h3 className="horizon">Horizon: {horizonte} </h3>
         </div>

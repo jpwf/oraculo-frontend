@@ -3034,103 +3034,130 @@ img, svg, canvas {
    min-width 2400px cobre o 3840 e nao afeta desktops 1920/2560.
 =========================================================================== */
 @media (min-width: 2400px) {
-  /* ---------- Sub-header e topo ---------- */
-  .system-infos {
-    padding: 18px 48px;
-    min-height: 88px;
-  }
+  /* Numa tela de 3840px de largura, tudo precisa ser MUITO maior para ser
+     legivel. Aumentamos fontes e alturas de forma agressiva e preenchemos
+     a altura do viewport (o conteudo ocupa a tela inteira, sem faixa fina). */
 
-  .home-main-wrapper {
-    padding: 20px 48px 28px;
-    gap: 20px;
-  }
+  /* ---------- Header ---------- */
+  .header { min-height: 132px; padding: 20px 56px; }
+  .header h2 { font-size: 30px; }
+  .dispatch-copy h3 { font-size: 16px; }
+  .switch-button { font-size: 16px; padding: 14px 30px; }
+  .text-status, .latency-label, .latency-value, .utc-value { font-size: 16px; }
+
+  /* ---------- Sub-header ---------- */
+  .system-infos { padding: 22px 56px; min-height: 108px; }
+  .region, .horizon, .field { font-size: 20px; padding: 14px 20px; }
+  .uf { font-size: 18px; padding: 10px 18px; }
+  .last-model-update { font-size: 18px; }
+  .refresh-button { font-size: 16px; padding: 14px 24px; }
 
   /* =========================================================
-     VISAO EXECUTIVA (TelemetryPage)
-     Layout em faixa: KPIs no topo (4 col) e abaixo
-     Mapa | BESS | Simulacao lado a lado (3 col) para usar a
-     largura e caber na altura de 1080px.
+     VISAO EXECUTIVA (TelemetryPage) — ocupa a tela toda.
+     KPIs no topo (4 col), abaixo Mapa | BESS | Simulacao.
   ========================================================= */
   .kpi-row {
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 22px;
-    padding: 18px 48px 0;
-    max-width: 2200px;
-    margin: 0 auto;
+    gap: 28px;
+    padding: 28px 56px 0;
   }
 
-  .kpi-card { min-height: 104px; }
+  .kpi-card { min-height: 150px; padding: 22px 26px; gap: 16px; }
+  .kpi-card-title { font-size: 17px; }
+  .kpi-donut { width: 92px; height: 92px; min-width: 92px; min-height: 92px; }
+  .kpi-donut-value { font-size: 46px; }
+  .kpi-big { font-size: 48px; }
+  .kpi-unit { font-size: 20px; }
+  .kpi-foot { font-size: 17px; }
+  .kpi-icon-box { width: 40px; height: 40px; }
 
   .telemetry-content {
     display: grid;
-    grid-template-columns: minmax(0, 1.5fr) minmax(360px, 0.8fr) minmax(0, 1.4fr);
-    gap: 22px;
-    padding: 18px 48px 24px;
+    grid-template-columns: minmax(0, 1.5fr) minmax(440px, 0.9fr) minmax(0, 1.45fr);
+    gap: 28px;
+    padding: 28px 56px 32px;
     align-items: stretch;
+    min-height: calc(100vh - 132px - 108px - 210px);
   }
 
-  /* Os dois blocos internos deixam de ter padding proprio: o grid pai controla. */
-  .telemetry-content .telemetry-main-row {
-    display: contents;
-    padding: 0;
-  }
-
-  .telemetry-content .simulation-row {
-    padding: 0;
-    min-width: 0;
-  }
-
-  /* Mapa e BESS voltam a ser colunas independentes dentro do grid pai. */
+  .telemetry-content .telemetry-main-row { display: contents; padding: 0; }
+  .telemetry-content .simulation-row { padding: 0; min-width: 0; }
   .telemetry-content .map-panel { min-width: 0; }
 
-  /* Alturas ajustadas para caber em 1080px. */
-  .map-panel-body { min-height: 520px; }
-  .sim-output-chart { height: 560px; }
-  .storage-battery-svg { height: 260px; }
+  .map-panel-title { font-size: 20px; }
+  .map-switch-btn { font-size: 16px; padding: 10px 20px; }
+  .map-panel-body { min-height: 0; flex: 1 1 auto; }
 
-  /* Painel de simulacao acompanha a altura da faixa. */
+  /* BESS — fontes bem maiores */
+  .storage-title { font-size: 22px; }
+  .storage-region-tag { font-size: 16px; padding: 8px 16px; }
+  .storage-sub { font-size: 17px; }
+  .storage-capacity { font-size: 18px; }
+  .storage-capacity strong { font-size: 22px; }
+  .storage-battery-label { font-size: 17px; }
+  .storage-soc { font-size: 34px; }
+  .storage-absorb { font-size: 16px; }
+  .storage-battery-svg { height: 300px; }
+  .storage-battery-legend { font-size: 16px; }
+  .storage-metric-label { font-size: 19px; }
+  .storage-metric-label small { font-size: 15px; }
+  .storage-metric-value { font-size: 22px; }
+  .storage-ready { font-size: 18px; }
+  .storage-dispatch-btn { font-size: 16px; padding: 12px 20px; }
+
+  /* Simulacao — painel preenche a coluna e o grafico cresce */
   .simulation-row .sim-output {
     height: 100%;
     display: flex;
     flex-direction: column;
   }
-  .simulation-row .sim-output-chart { flex: 1 1 auto; height: auto; min-height: 520px; }
+  .sim-output-title { font-size: 22px; }
+  .sim-output-subtitle { font-size: 17px; }
+  .sim-output-chart { flex: 1 1 auto; height: auto; min-height: 0; }
 
   /* =========================================================
      VISAO DETALHADA (HomePage)
   ========================================================= */
-  .home-panel { padding: 22px 24px 20px; }
+  .home-main-wrapper { padding: 28px 56px 36px; gap: 28px; }
+  .home-panel { padding: 28px 30px 26px; }
+  .panel-title-wrap { font-size: 20px; }
+  .panel-status { font-size: 15px; padding: 8px 14px; }
+  .pipeline-heading { font-size: 15px; }
 
-  .pipeline-steps {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 20px;
-  }
+  .pipeline-steps { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 24px; }
+  .pipeline-card { min-height: 210px; padding: 20px 18px; }
+  .pipeline-card-header { font-size: 15px; }
+  .pipeline-list li { font-size: 16px; }
+  .pipeline-run-button { height: 42px; font-size: 15px; }
+  .step-number { width: 28px; height: 28px; font-size: 14px; }
 
-  /* Grafico previsto vs. observado ganha bem mais largura que os Key Outputs. */
   .forecast-grid {
-    grid-template-columns: minmax(0, 2.4fr) minmax(360px, 0.8fr);
-    gap: 24px;
+    grid-template-columns: minmax(0, 2.2fr) minmax(440px, 0.9fr);
+    gap: 30px;
   }
+  .chart-panel-title { font-size: 20px; }
+  .asset-select span { font-size: 15px; }
+  .asset-select select { font-size: 17px; padding: 10px 16px; max-width: 360px; }
+  .home-chart { height: 520px; }
 
-  .home-chart { height: 460px; }
-
-  .metric-box strong { font-size: 30px; }
-  .metric-box { min-height: 104px; }
-
-  /* Legibilidade geral em telas grandes. */
-  .kpi-card-title { font-size: 11px; }
-  .kpi-donut-value { font-size: 30px; }
-  .kpi-big { font-size: 32px; }
-  .sim-output-title { font-size: 16px; }
-  .map-panel-title { font-size: 14px; }
-  .storage-title { font-size: 16px; }
+  .key-output-title { font-size: 20px; }
+  .metric-box { min-height: 130px; padding: 22px 18px 16px; }
+  .metric-box span { font-size: 15px; }
+  .metric-box strong { font-size: 42px; }
+  .metric-box strong small { font-size: 16px; }
+  .mini-stat { padding: 16px 18px; }
+  .mini-stat span { font-size: 15px; }
+  .mini-stat strong { font-size: 24px; }
 }
 
-/* ---- 32:9 muito largo (>= 3200px): reforca a faixa unica e limita alturas
-   ainda mais para caber com folga em 1080px de altura. -------------------- */
-@media (min-width: 3200px) {
-  .map-panel-body { min-height: 620px; }
-  .sim-output-chart { height: 640px; }
-  .simulation-row .sim-output-chart { min-height: 600px; }
-  .home-chart { height: 520px; }
+/* ---- 32:9 muito largo (>= 3400px): sobe as fontes e o grafico mais um degrau. */
+@media (min-width: 3400px) {
+  .kpi-card-title { font-size: 19px; }
+  .kpi-big { font-size: 56px; }
+  .kpi-donut-value { font-size: 52px; }
+  .storage-metric-label { font-size: 21px; }
+  .storage-metric-value { font-size: 25px; }
+  .metric-box strong { font-size: 48px; }
+  .home-chart { height: 560px; }
+  .sim-output-title { font-size: 24px; }
 }
