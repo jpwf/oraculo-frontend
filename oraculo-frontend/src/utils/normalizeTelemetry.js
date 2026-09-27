@@ -1,6 +1,3 @@
-// Funcoes puras de normalizacao de telemetria.
-// Sem hooks / sem React: podem rodar na main thread OU dentro de um Web Worker.
-
 export const defaultRiskPoints = [
   { label: 'High Risk', value: '78%', color: '#ef4444' },
   { label: 'Medium Risk', value: '42%', color: '#f59e0b' },
@@ -8,8 +5,6 @@ export const defaultRiskPoints = [
 ]
 
 export const defaultMapResources = [
-  // Coordenadas escolhidas para cair DENTRO do estado indicado (conferido via
-  // point-in-polygon contra o GeoJSON dos estados).
   { type: 'WIND', name: 'Parque Eólico Caçamari', estado: 'BA', quantity: 180, coordinates: [-41.0, -11.2], color: '#38bdf8' },
   { type: 'WIND', name: 'Parque Eólico Sertão', estado: 'PE', quantity: 150, coordinates: [-38.3, -8.4], color: '#38bdf8' },
   { type: 'SOLAR_PLANT', name: 'Usina Solar Piauí', estado: 'PI', quantity: 210, coordinates: [-42.8, -7.6], color: '#f59e0b' },
@@ -28,6 +23,74 @@ export const defaultCauseRows = [
 export const defaultRiskEvolutionSeries = [5, 18, 28, 45, 62, 78, 82, 64, 42, 22, 10, 6]
 export const defaultRiskEvolutionPeak = { time: '14:15', value: 82 }
 
+export const defaultSimulationTimeLabels = [
+  '00:00 (D0)', '02:00', '04:00', '06:00', '08:00', '10:00', '12:00',
+  '14:00', '16:00', '18:00', '20:00', '22:00', '24:00 (D1)',
+]
+
+export const defaultAbsorptionLimit = [
+  2600, 2550, 2500, 2600, 2800, 3000, 3100,
+  3150, 3120, 3050, 2900, 2750, 2650,
+]
+
+export const defaultTotalGeneration = [
+  1800, 1650, 1600, 2100, 2900, 3350, 3470,
+  3400, 3250, 2950, 2600, 2200, 1900,
+]
+
+export const defaultCurtailmentPeak = { label: 'Corte Previsto', value: 320, unit: 'MW' }
+
+export const defaultSimulationOutput = {
+  title: 'SAÍDA DA SIMULAÇÃO — PREVISÃO DE CORTE DE GERAÇÃO (MW)',
+  subtitle: 'Curvas de Equilíbrio Operacional do SIN',
+  yMax: 4000,
+  timeLabels: defaultSimulationTimeLabels,
+  absorptionLimit: defaultAbsorptionLimit,
+  totalGeneration: defaultTotalGeneration,
+  peak: defaultCurtailmentPeak,
+}
+
+export const normalizeSimulationOutput = (source) => {
+  const src = source && typeof source === 'object' ? source : {}
+
+  const timeLabels = Array.isArray(src.timeLabels) && src.timeLabels.length
+    ? src.timeLabels.map((label) => String(label))
+    : defaultSimulationTimeLabels
+
+  const len = timeLabels.length
+
+  const toSeries = (value, fallback) => {
+    const arr = Array.isArray(value) && value.length ? value : fallback
+    return Array.from({ length: len }, (_, i) => parseNumber(arr[i] ?? arr[arr.length - 1], 0))
+  }
+
+  const absorptionLimit = toSeries(src.absorptionLimit ?? src.limit, defaultAbsorptionLimit)
+  const totalGeneration = toSeries(src.totalGeneration ?? src.generation, defaultTotalGeneration)
+
+  const curtailment = totalGeneration.map((gen, i) => Math.max(0, gen - absorptionLimit[i]))
+
+  const peakSrc = src.peak && typeof src.peak === 'object' ? src.peak : {}
+  const derivedPeak = curtailment.length ? Math.max(...curtailment) : 0
+  const peak = {
+    label: String(peakSrc.label ?? defaultCurtailmentPeak.label),
+    value: parseNumber(peakSrc.value ?? derivedPeak, defaultCurtailmentPeak.value),
+    unit: String(peakSrc.unit ?? defaultCurtailmentPeak.unit),
+  }
+  const peakIndex = curtailment.indexOf(Math.max(...curtailment))
+
+  return {
+    title: String(src.title ?? defaultSimulationOutput.title),
+    subtitle: String(src.subtitle ?? defaultSimulationOutput.subtitle),
+    yMax: parseNumber(src.yMax, defaultSimulationOutput.yMax),
+    timeLabels,
+    absorptionLimit,
+    totalGeneration,
+    curtailment,
+    peak,
+    peakIndex: peakIndex >= 0 ? peakIndex : 0,
+  }
+}
+
 export const defaultCriticalPoint = {
   name: 'NE — Sobradinho',
   severity: 'Critical',
@@ -37,12 +100,8 @@ export const defaultCriticalPoint = {
   coordinates: [-40.5, -9.41],
 }
 
-// Linha de transmissao exibida no card "Highest-Risk Node".
 export const defaultTransmissionLine = 'Sobradinho → Juazeiro 500kV'
 
-// Zonas de risco desenhadas SOBRE o mapa (poligonos georreferenciados,
-// equivalentes a um "shapefile" de areas). Cada zona: lista de [lon, lat],
-// um nivel de severidade e um rotulo. Cores default por nivel abaixo.
 export const riskZoneColors = {
   HIGH: '#ef4444',
   MEDIUM: '#f59e0b',
@@ -50,7 +109,6 @@ export const riskZoneColors = {
   DEFAULT: '#94a3b8',
 }
 
-// UF -> nome do estado (chave usada pelo GeoJSON `brazil-states.json`).
 export const ufToStateName = {
   AC: 'Acre', AL: 'Alagoas', AM: 'Amazonas', AP: 'Amapá', BA: 'Bahia',
   CE: 'Ceará', DF: 'Distrito Federal', ES: 'Espírito Santo', GO: 'Goiás',
@@ -61,11 +119,10 @@ export const ufToStateName = {
   TO: 'Tocantins',
 }
 
-// Cores por nivel de geracao MMGD (foto: Baixa/Media/Alta).
 export const mmgdLevelColors = {
-  LOW: '#64748b',    // Baixa Geracao (contorno claro)
-  MEDIUM: '#f59e0b', // Media Geracao (ambar)
-  HIGH: '#ef4444',   // Alta Geracao (vermelho)
+  LOW: '#64748b',
+  MEDIUM: '#f59e0b',
+  HIGH: '#ef4444',
 }
 
 export const mmgdLevelLabels = {
@@ -74,25 +131,73 @@ export const mmgdLevelLabels = {
   HIGH: 'Alta Geração MMGD',
 }
 
-// Nivel de geracao MMGD por UF (default; alimentavel por request).
 export const defaultMmgdLevels = {
-  MA: 'MEDIUM',
-  PI: 'MEDIUM',
+  AL: 'HIGH', PE: 'HIGH',
+  BA: 'HIGH', SE: 'HIGH',
   CE: 'MEDIUM',
-  RN: 'MEDIUM',
-  PB: 'MEDIUM',
-  GO: 'MEDIUM',
-  BA: 'HIGH',
-  PE: 'HIGH',
-  SE: 'HIGH',
-  AL: 'HIGH',
+  MA: 'MEDIUM',
+  PB: 'MEDIUM', RN: 'MEDIUM',
+  PI: 'MEDIUM',
 }
 
-// Zonas MMGD desenhadas como POLIGONOS sobre o mapa (modo Geracao MMGD),
-// coloridas por nivel de geracao (Baixa/Media/Alta). Alimentavel por request.
-// Zonas MMGD focadas apenas no NORDESTE (poligonos por nivel de geracao).
-// Poligonos MMGD por regiao (estilo foto): ambar = Media, vermelho = Alta.
-// Cada zona tem `uf` (usada no clique para atualizar os dados) e `label` (rotulo).
+const buildHourlyMmgdCurve = (scale) => {
+  const shape = [
+    0, 0, 0, 0, 0, 0.02, 0.08, 0.20, 0.38, 0.58, 0.76, 0.90,
+    1.0, 0.98, 0.88, 0.72, 0.52, 0.32, 0.16, 0.06, 0.01, 0, 0, 0,
+  ]
+  return shape.map((factor) => Math.round(factor * scale))
+}
+
+export const defaultMmgdGroups = [
+  { id: 'AL_PE', label: 'AL_PE', name: 'Alagoas, Pernambuco', ufs: ['AL', 'PE'], level: 'HIGH', peak: 620 },
+  { id: 'BA_SE', label: 'BA_SE', name: 'Bahia, Sergipe', ufs: ['BA', 'SE'], level: 'HIGH', peak: 580 },
+  { id: 'CE', label: 'CE', name: 'Ceará', ufs: ['CE'], level: 'MEDIUM', peak: 410 },
+  { id: 'MA', label: 'MA', name: 'Maranhão', ufs: ['MA'], level: 'MEDIUM', peak: 320 },
+  { id: 'PB_RN', label: 'PB_RN', name: 'Paraíba, Rio Grande do Norte', ufs: ['PB', 'RN'], level: 'MEDIUM', peak: 460 },
+  { id: 'PI', label: 'PI', name: 'Piauí', ufs: ['PI'], level: 'MEDIUM', peak: 380 },
+].map((group) => ({ ...group, hourly: buildHourlyMmgdCurve(group.peak) }))
+
+export const mmgdHourLabels = Array.from({ length: 24 }, (_, i) => `t+${i + 1}`)
+
+export const normalizeMmgdGroups = (source) => {
+  const list = Array.isArray(source) && source.length ? source : defaultMmgdGroups
+
+  return list
+    .map((group, index) => {
+      if (!group || typeof group !== 'object') return null
+
+      const level = String(group.level ?? 'MEDIUM').toUpperCase()
+      const rawHourly = Array.isArray(group.hourly) ? group.hourly : null
+      const peak = parseNumber(group.peak ?? (rawHourly ? Math.max(...rawHourly) : 0), 0)
+      const hourly = rawHourly
+        ? Array.from({ length: 24 }, (_, i) => parseNumber(rawHourly[i], 0))
+        : buildHourlyMmgdCurve(peak || 300)
+
+      return {
+        id: String(group.id ?? group.label ?? `mmgd-group-${index}`),
+        label: String(group.label ?? group.id ?? `Grupo ${index + 1}`),
+        name: String(group.name ?? group.label ?? ''),
+        ufs: Array.isArray(group.ufs) ? group.ufs.map((uf) => String(uf).toUpperCase()) : [],
+        level,
+        levelLabel: mmgdLevelLabels[level] || level,
+        color: group.color || mmgdLevelColors[level] || mmgdLevelColors.MEDIUM,
+        peak: peak || (hourly.length ? Math.max(...hourly) : 0),
+        hourly,
+      }
+    })
+    .filter(Boolean)
+}
+
+export const mmgdLevelsFromGroups = (groups) => {
+  const levels = {}
+  for (const group of groups || []) {
+    for (const uf of group.ufs || []) {
+      levels[String(uf).toUpperCase()] = group.level
+    }
+  }
+  return levels
+}
+
 export const defaultMmgdZones = [
   {
     id: 'mmgd-ma', uf: 'MA', label: 'MA', level: 'MEDIUM',
@@ -168,7 +273,46 @@ export const defaultRiskZones = [
   },
 ]
 
-// Bloco "Recommended ISO dispatch action".
+const buildHourlyCurtailmentCurve = (peak) => {
+  const shape = [
+    0, 0, 0, 0, 0, 0, 0, 0.05, 0.15, 0.30, 0.55, 0.78,
+    1.0, 0.95, 0.82, 0.60, 0.38, 0.18, 0.06, 0, 0, 0, 0, 0,
+  ]
+  return shape.map((factor) => Math.round(factor * peak))
+}
+
+export const defaultWindAssetForecast = [
+  { id: 'cacamari', name: 'Parque Eólico Caçamari', uf: 'BA', coordinates: [-41.0, -11.2], volume: 180, probability: 78 },
+  { id: 'sertao', name: 'Parque Eólico Sertão', uf: 'PE', coordinates: [-38.3, -8.4], volume: 150, probability: 69 },
+  { id: 'acu', name: 'Parque Eólico Açu', uf: 'RN', coordinates: [-36.9, -5.6], volume: 120, probability: 58 },
+].map((asset) => ({ ...asset, hourly: buildHourlyCurtailmentCurve(asset.volume) }))
+
+export const normalizeWindAssetForecast = (source) => {
+  const list = Array.isArray(source) && source.length ? source : defaultWindAssetForecast
+
+  return list
+    .map((asset, index) => {
+      if (!asset || typeof asset !== 'object') return null
+      const volume = parseNumber(asset.volume ?? asset.mw ?? asset.constrainedOff, 0)
+      const rawHourly = Array.isArray(asset.hourly) ? asset.hourly : null
+      const hourly = rawHourly
+        ? Array.from({ length: 24 }, (_, i) => parseNumber(rawHourly[i], 0))
+        : buildHourlyCurtailmentCurve(volume || 100)
+
+      return {
+        id: String(asset.id ?? asset.name ?? `asset-${index}`),
+        name: String(asset.name ?? asset.label ?? `Usina ${index + 1}`),
+        uf: asset.uf ? String(asset.uf).toUpperCase() : null,
+        coordinates: parseCoordinates(asset.coordinates ?? asset.coords, null),
+        volume,
+        probability: parseNumber(asset.probability ?? asset.prob, 0),
+        hourly,
+      }
+    })
+    .filter(Boolean)
+    .slice(0, 3)
+}
+
 export const defaultMitigation = {
   action: 'Activate 180 MW of BESS between 13:30 and 16:45',
   curtailmentWithout: 320,
@@ -178,39 +322,34 @@ export const defaultMitigation = {
   resourcesRequired: 'BESS + Flexible Load (Sobradinho 500kV)',
 }
 
-// KPIs do topo (foto 1, em portugues).
 export const defaultKpis = {
-  // Probabilidade de Constrained Off (donut) = curtailmentValue.
-  volumeEolico: 320, // Volume Eolico Constrained Off previsto (MW)
-  minutosRestritos: 45, // Minutos restritos por hora operativa (min)
-  duracaoContinua: '3h 15min', // duracao continua
+  volumeEolico: 320,
+  volumeEolicoUnidade: 'MWméd',
+  volumeEolicoMwh: 1440,
+  minutosRestritos: 45,
+  duracaoContinua: '3h 15min',
   janelaCritica: '13:30 - 16:45',
-  volumeMMGD: 1500, // Volume MMGD total previsto T+24 (MW)
+  volumeMMGD: 1500,
 }
 
-// Painel "Estado de Armazenamento (BESS)" (fotos 1 e 2).
 export const defaultStorage = {
   subestacao: 'Nordeste (NE) • Subestação Sobradinho 500kV',
   regiaoTag: 'Nordeste (NE)',
   disponibilidade: 'DISPONÍVEL P/ ABSORÇÃO',
-  capacidadeTotal: 450, // MWh
-  nivelCarga: 48, // % (nivel atual da bateria)
-  cargaAtual: 216, // MWh
-  absorcao: 108, // +MWh (potencial de absorcao/constrained off)
-  margem: 28, // % de margem
-  alocacaoPotencial: 72, // % (topo da faixa hachurada = nivel + margem)
-  volumeEsperadoAbsorcao: 108, // MWmed
+  capacidadeTotal: 450,
+  nivelCarga: 48,
+  cargaAtual: 216,
+  absorcao: 108,
+  margem: 28,
+  alocacaoPotencial: 72,
+  volumeEsperadoAbsorcao: 108,
   volumeEsperadoLabel: '108 MWméd',
-  valorRecuperado: 142800.0, // R$
+  valorRecuperado: 142800.0,
   proximaRecarga: '16:00h - 18:00h (Próximo Dia)',
   cRate: '0.5C (90 MW) • 1.8 ciclos/dia',
   prontidaoVpp: '100% Sincronizado',
 }
 
-// Dados POR ESTADO (UF). Ao clicar num ativo no mapa MMGD, os KPIs/BESS
-// exibidos passam a ser os do estado do ativo. Ativos no mesmo estado
-// compartilham os mesmos dados. Alimentavel por request (payload.assetsByState).
-// Cada entrada sobrescreve campos de kpis/storage/curtailment/criticalWindow.
 export const defaultAssetsByState = {
   BA: {
     regiao: 'Bahia', curtailmentValue: 78, criticalWindow: '13:30 - 16:45',
@@ -254,8 +393,6 @@ export const defaultAssetsByState = {
   },
 }
 
-// Aplica os overrides do estado sobre o objeto normalizado base.
-// Retorna um novo objeto normalizado com kpis/storage/curtailment do estado.
 export const applyStateData = (base, uf, assetsByState) => {
   const map = assetsByState || {}
   const st = map[String(uf || '').toUpperCase()]
@@ -314,8 +451,6 @@ export const normalizeRiskPoints = (source) => {
   }))
 }
 
-// Normaliza zonas de risco (poligonos) vindas do payload; cai nos defaults
-// se nao houver zonas validas. Cada poligono e uma lista de [lon, lat].
 export const normalizeRiskZones = (source) => {
   if (!Array.isArray(source) || source.length === 0) return defaultRiskZones
 
@@ -348,8 +483,6 @@ export const normalizeRiskZones = (source) => {
   return zones.length ? zones : defaultRiskZones
 }
 
-// Normaliza as zonas MMGD (poligonos por nivel de geracao) vindas do payload;
-// cai nos defaults se nada valido. Resolve cor e rotulo por nivel.
 export const normalizeMmgdZones = (source) => {
   const list = Array.isArray(source) && source.length ? source : defaultMmgdZones
 
@@ -404,14 +537,12 @@ export const normalizeResources = (source) => {
         name: resource.name || resource.label || resource.asset || type,
         quantity: parseNumber(resource.quantity ?? resource.capacity ?? resource.mw ?? resource.amount ?? 1, 1),
         coordinates,
-        // Preserva a cor propria; se nao houver, o RiskMap resolve pela cor do tipo.
         color: resource.color || undefined,
       }
     })
     .filter(Boolean)
 }
 
-// Distancia euclidiana simples entre dois pares [lon, lat].
 const coordDistance = (a, b) => {
   if (!a || !b) return Infinity
   const dLon = a[0] - b[0]
@@ -419,17 +550,11 @@ const coordDistance = (a, b) => {
   return Math.sqrt(dLon * dLon + dLat * dLat)
 }
 
-// Deriva o ponto critico a partir do CRUZAMENTO de coordenadas:
-// o recurso (wind farm, solar plant, etc.) mais proximo do centro de risco
-// do mapa define o ponto; os assets "afetados" sao os que caem dentro de um raio.
-// Os valores (prob, volume, assets) vem do payload/curtailment quando existirem,
-// senao caem para os defaults.
 export const deriveCriticalPoint = (payload, mapCoordinates, resources, curtailmentValue) => {
   const explicit = payload?.criticalPoint ?? payload?.critical_point ?? payload?.riskMap?.criticalPoint
 
   const list = Array.isArray(resources) ? resources : []
 
-  // Cruzamento: recurso mais proximo do centro de risco (mapCoordinates).
   let nearest = null
   let nearestDist = Infinity
   for (const resource of list) {
@@ -440,14 +565,11 @@ export const deriveCriticalPoint = (payload, mapCoordinates, resources, curtailm
     }
   }
 
-  // Coordenada do ponto critico: a explicita > o cruzamento > o proprio centro.
   const coordinates = parseCoordinates(
     explicit?.coordinates ?? explicit?.coords ?? nearest?.coordinates ?? mapCoordinates,
     defaultCriticalPoint.coordinates
   )
 
-  // Assets afetados: recursos dentro de um raio do ponto critico (cluster de risco).
-  // ~3.5 graus cobre o cluster do submercado; se pegar poucos, usa o total.
   const RADIUS = 3.5
   const affectedNearby = list.filter((resource) => coordDistance(resource.coordinates, coordinates) <= RADIUS)
   const affectedFromCrossing = affectedNearby.length > 1 ? affectedNearby.length : list.length
@@ -491,17 +613,18 @@ export const normalizeTelemetryPayload = (payload = {}) => {
     resourcesRequired: String(mit.resourcesRequired ?? mit.resources ?? defaultMitigation.resourcesRequired),
   }
 
-  // KPIs do topo (foto 1) — alimentados pelo payload, com defaults.
   const k = payload.kpis ?? {}
+  const volumeEolico = parseNumber(k.volumeEolico ?? payload.volumeEolico ?? payload.windConstrained, defaultKpis.volumeEolico)
   const kpis = {
-    volumeEolico: parseNumber(k.volumeEolico ?? payload.volumeEolico ?? payload.windConstrained, defaultKpis.volumeEolico),
+    volumeEolico,
+    volumeEolicoUnidade: String(k.volumeEolicoUnidade ?? payload.volumeEolicoUnidade ?? defaultKpis.volumeEolicoUnidade),
+    volumeEolicoMwh: parseNumber(k.volumeEolicoMwh ?? payload.volumeEolicoMwh, defaultKpis.volumeEolicoMwh),
     minutosRestritos: parseNumber(k.minutosRestritos ?? payload.minutosRestritos ?? payload.restrictedMinutes, defaultKpis.minutosRestritos),
     duracaoContinua: String(k.duracaoContinua ?? payload.duracaoContinua ?? defaultKpis.duracaoContinua),
     janelaCritica: String(k.janelaCritica ?? payload.criticalWindow ?? payload.critical_window ?? defaultKpis.janelaCritica),
     volumeMMGD: parseNumber(k.volumeMMGD ?? payload.volumeMMGD ?? payload.mmgdTotal, defaultKpis.volumeMMGD),
   }
 
-  // Painel BESS (fotos 1 e 2) — alimentado pelo payload, com defaults.
   const s = payload.storage ?? payload.bess ?? {}
   const nivelCarga = parseNumber(s.nivelCarga ?? s.charge ?? s.soc, defaultStorage.nivelCarga)
   const margem = parseNumber(s.margem ?? s.margin, defaultStorage.margem)
@@ -525,10 +648,19 @@ export const normalizeTelemetryPayload = (payload = {}) => {
 
   const assetsByState = payload.assetsByState ? { ...defaultAssetsByState, ...payload.assetsByState } : defaultAssetsByState
 
+  const mmgdGroups = normalizeMmgdGroups(payload.mmgdGroups ?? payload.mmgd?.groups)
+  const windAssetForecast = normalizeWindAssetForecast(payload.windAssetForecast ?? payload.assetForecast ?? payload.windAssets)
+  const mmgdLevels = payload.mmgdLevels
+    ? { ...defaultMmgdLevels, ...payload.mmgdLevels }
+    : { ...defaultMmgdLevels, ...mmgdLevelsFromGroups(mmgdGroups) }
+
   return {
     kpis,
     storage,
-    mmgdLevels: { ...defaultMmgdLevels, ...(payload.mmgdLevels || {}) },
+    mmgdLevels,
+    mmgdGroups,
+    mmgdHourLabels,
+    windAssetForecast,
     assetsByState,
     regiao: payload.regiao || payload.region || payload.area || 'Northeast',
     uf: payload.uf || payload.submarket || payload.state || 'NE',
@@ -558,5 +690,6 @@ export const normalizeTelemetryPayload = (payload = {}) => {
       ? payload.riskEvolutionSeries.map((value) => parseNumber(value, 0))
       : defaultRiskEvolutionSeries,
     riskEvolutionPeak: payload.riskEvolutionPeak || payload.peak || defaultRiskEvolutionPeak,
+    simulationOutput: normalizeSimulationOutput(payload.simulationOutput ?? payload.simulation ?? payload.curtailmentForecast),
   }
 }

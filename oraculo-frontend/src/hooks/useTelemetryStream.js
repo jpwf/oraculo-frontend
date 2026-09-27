@@ -1,19 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 
-// Ponto 1B: atualizacao continua em tempo real.
-// Estrategia primaria: SSE (EventSource) -> o backend empurra telemetria.
-// Fallback: polling em intervalo quando o stream nao conecta ou nao existe.
-//
-// Parametros:
-//   streamUrl   - URL do endpoint text/event-stream (ex: `${VITE_API_URL}/stream/telemetry`)
-//   pollFetcher - funcao async () => payload, usada no fallback de polling
-//   options     - { enabled, pollIntervalMs }
 export function useTelemetryStream(streamUrl, pollFetcher, options = {}) {
   const { enabled = true, pollIntervalMs = 10000 } = options
 
   const [data, setData] = useState(null)
   const [connected, setConnected] = useState(false)
-  const [transport, setTransport] = useState('idle') // 'sse' | 'polling' | 'idle'
+  const [transport, setTransport] = useState('idle')
 
   const pollTimerRef = useRef(null)
   const pollFetcherRef = useRef(pollFetcher)
@@ -42,7 +34,6 @@ export function useTelemetryStream(streamUrl, pollFetcher, options = {}) {
           const payload = await pollFetcherRef.current()
           if (!disposed && payload != null) setData(payload)
         } catch {
-          // silencioso: mantem o ultimo estado valido
         }
       }
 
@@ -67,7 +58,7 @@ export function useTelemetryStream(streamUrl, pollFetcher, options = {}) {
         if (disposed) return
         setConnected(true)
         setTransport('sse')
-        stopPolling() // se estava em polling, para: o stream assumiu
+        stopPolling()
       }
 
       eventSource.onmessage = (event) => {
@@ -75,14 +66,12 @@ export function useTelemetryStream(streamUrl, pollFetcher, options = {}) {
         try {
           setData(JSON.parse(event.data))
         } catch {
-          // frame invalido: ignora
         }
       }
 
       eventSource.onerror = () => {
         if (disposed) return
         setConnected(false)
-        // Enquanto o browser tenta reconectar o SSE, garante dados via polling.
         startPolling()
       }
     }

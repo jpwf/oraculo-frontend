@@ -2528,7 +2528,7 @@ html, body {
 
 .storage-title {
   color: #eaf1fb;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.04em;
 }
@@ -2537,9 +2537,9 @@ html, body {
   border: 1px solid rgba(52, 211, 153, 0.5);
   color: #34d399;
   background: rgba(52, 211, 153, 0.1);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
-  padding: 3px 10px;
+  padding: 4px 12px;
   border-radius: 6px;
   white-space: nowrap;
 }
@@ -2549,7 +2549,7 @@ html, body {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  font-size: 10.5px;
+  font-size: 12.5px;
   color: #8ea1b8;
 }
 .storage-avail { color: #34d399; font-weight: 700; text-align: right; }
@@ -2558,10 +2558,10 @@ html, body {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: 13px;
   color: #8ea1b8;
 }
-.storage-capacity strong { color: #f3f6fb; font-size: 13px; }
+.storage-capacity strong { color: #f3f6fb; font-size: 15px; }
 
 .storage-battery-block {
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -2582,7 +2582,7 @@ html, body {
 
 .storage-battery-label {
   color: #8ea1b8;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
   max-width: 60%;
@@ -2593,8 +2593,8 @@ html, body {
   align-items: baseline;
   gap: 6px;
 }
-.storage-soc { color: #34d399; font-size: 18px; font-weight: 700; }
-.storage-absorb { color: #8ea1b8; font-size: 10px; }
+.storage-soc { color: #34d399; font-size: 22px; font-weight: 700; }
+.storage-absorb { color: #8ea1b8; font-size: 12px; }
 
 .storage-battery-svg {
   height: 200px;
@@ -2608,7 +2608,7 @@ html, body {
   align-items: center;
   justify-content: center;
   gap: 18px;
-  font-size: 10px;
+  font-size: 12px;
   color: #cbd6e6;
 }
 .storage-battery-legend i {
@@ -2638,9 +2638,9 @@ html, body {
   display: flex;
   flex-direction: column;
   color: #cbd6e6;
-  font-size: 11.5px;
+  font-size: 13.5px;
 }
-.storage-metric-label small { color: #64748b; font-size: 9px; }
+.storage-metric-label small { color: #64748b; font-size: 11px; }
 .storage-metric-label .m-dot {
   display: inline-block;
   width: 6px;
@@ -2654,7 +2654,7 @@ html, body {
 
 .storage-metric-value {
   color: #f3f6fb;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
   text-align: right;
   white-space: nowrap;
@@ -2670,14 +2670,14 @@ html, body {
   padding-top: 12px;
   margin-top: auto;
 }
-.storage-ready { color: #8ea1b8; font-size: 11px; }
+.storage-ready { color: #8ea1b8; font-size: 13px; }
 .storage-ready strong { color: #34d399; }
 
 .storage-dispatch-btn {
   border: 1px solid rgba(148, 163, 184, 0.3);
   background: rgba(52, 211, 153, 0.12);
   color: #34d399;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
   padding: 8px 14px;
@@ -2707,3 +2707,430 @@ html, body {
   cursor: pointer;
 }
 .map-clear-btn:hover { border-color: rgba(148, 163, 184, 0.55); }
+
+/* ---------------------------------------------------------------------------
+   Painel "SAÍDA DA SIMULAÇÃO — PREVISÃO DE CORTE DE GERAÇÃO (MW)"
+   Substitui a antiga linha RISK DETAILS / Causa Provável (full-width).
+--------------------------------------------------------------------------- */
+.simulation-row {
+  padding: 0 18px 18px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.sim-output {
+  background: #0b1526;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 16px 18px 12px;
+  color: #e5edf9;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.sim-output-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 12px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.sim-output-title {
+  margin: 0;
+  color: #f3f6fb;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.sim-output-subtitle {
+  color: rgba(219, 225, 235, 0.7);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.sim-output-chart {
+  width: 100%;
+  height: 360px;
+  position: relative;
+}
+
+.sim-output-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.sim-output-chart.is-loading {
+  opacity: 0.45;
+}
+
+/* ===========================================================================
+   RESPONSIVIDADE GLOBAL
+   Breakpoints progressivos. Os layouts desktop ficam intactos acima de 1200px;
+   abaixo disso, os grids de colunas fixas colapsam gradualmente ate 1 coluna.
+   Usa minmax/auto-fit onde faz sentido para adaptar a qualquer largura.
+=========================================================================== */
+
+/* Evita overflow horizontal em qualquer viewport. */
+html, body, #root {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Imagens/SVG/canvas nunca estouram o container. */
+img, svg, canvas {
+  max-width: 100%;
+}
+
+/* ---- <= 1280px: reduz colunas de 5 e afrouxa mínimos altos ------------- */
+@media (max-width: 1280px) {
+  .pipeline-steps,
+  .model-architecture-block {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .vpp-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .model-metrics-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .prediction-info {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+}
+
+/* ---- <= 1024px: painéis de 2 colunas viram 1; mapa/BESS empilham ------- */
+@media (max-width: 1024px) {
+  .telemetry-main-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .forecast-grid,
+  .model-two-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .scenario-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .second-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vpp-main-layout {
+    flex-direction: column;
+  }
+
+  .mitigation-panel {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Fluxo de dados: deixa de ser uma linha rígida e passa a quebrar. */
+  .data-flow-row {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+  }
+  .data-flow-arrow-pill {
+    transform: rotate(90deg);
+    justify-self: center;
+  }
+}
+
+/* ---- <= 900px: grids de 3 colunas viram 2; mapa reduz altura ---------- */
+@media (max-width: 900px) {
+  .pipeline-steps,
+  .model-architecture-block,
+  .vpp-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .map-panel-body {
+    min-height: 320px;
+  }
+
+  .sim-output-chart {
+    height: 300px;
+  }
+
+  /* Sub-header (Region / Submarket / Horizon) empilha e ocupa largura total. */
+  .left-sub-header,
+  .right-sub-header {
+    gap: 12px;
+  }
+  .region,
+  .horizon,
+  .field {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+/* ---- <= 768px: predominantemente 1 coluna ----------------------------- */
+@media (max-width: 768px) {
+  .home-main-wrapper {
+    padding: 16px 14px 24px;
+  }
+
+  .home-panel {
+    padding: 14px 12px 14px;
+  }
+
+  .metrics-grid,
+  .mini-stat-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .model-metrics-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .map-switch {
+    flex-wrap: wrap;
+  }
+
+  .map-panel-head {
+    align-items: flex-start;
+  }
+
+  .sim-output-chart {
+    height: 260px;
+  }
+
+  .map-panel-body {
+    min-height: 280px;
+  }
+}
+
+/* ---- <= 640px: tudo 1 coluna; paddings menores ------------------------ */
+@media (max-width: 640px) {
+  .kpi-row,
+  .pipeline-steps,
+  .model-architecture-block,
+  .vpp-cards,
+  .prediction-info,
+  .metrics-grid,
+  .mini-stat-row,
+  .scenario-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .kpi-row,
+  .telemetry-main-row {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .simulation-row {
+    padding: 0 12px 14px;
+  }
+
+  .prediction-info {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .kpi-donut-value {
+    font-size: 22px;
+  }
+
+  .kpi-big {
+    font-size: 24px;
+  }
+
+  .sim-output-chart {
+    height: 240px;
+  }
+
+  .mitigation-panel h4,
+  .cause-title {
+    font-size: 18px;
+  }
+}
+
+/* ---- <= 480px: telas muito estreitas (celular) ------------------------ */
+@media (max-width: 480px) {
+  .system-infos {
+    padding: 14px 12px;
+  }
+
+  .map-panel-title {
+    font-size: 11px;
+  }
+
+  .storage-title {
+    font-size: 13px;
+  }
+
+  .sim-output-title {
+    font-size: 12px;
+  }
+
+  .sim-output-chart {
+    height: 220px;
+  }
+
+  /* Linhas rótulo/valor que podem apertar demais passam a empilhar. */
+  .storage-metric-row,
+  .mitigation-row,
+  .cause-summary-row {
+    gap: 8px;
+  }
+}
+
+/* Seletor de usina no painel "Previsto vs. Observado" (Visão Detalhada). */
+.asset-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #c7d8ef;
+  font-size: 12px;
+}
+
+.asset-select span {
+  color: #c7d8ef;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.asset-select select {
+  background: rgba(11, 21, 38, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 8px;
+  color: #edf3ff;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+  max-width: 260px;
+}
+
+.asset-select select:hover {
+  border-color: rgba(148, 163, 184, 0.55);
+}
+
+.asset-select select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ===========================================================================
+   ULTRAWIDE 32:9 — otimizado para 3840x1080 (dois monitores 1920x1080).
+   Largura enorme + altura curta: espalha o conteudo na horizontal e reduz
+   alturas para caber em ~1080px sem scroll vertical exagerado.
+   min-width 2400px cobre o 3840 e nao afeta desktops 1920/2560.
+=========================================================================== */
+@media (min-width: 2400px) {
+  /* ---------- Sub-header e topo ---------- */
+  .system-infos {
+    padding: 18px 48px;
+    min-height: 88px;
+  }
+
+  .home-main-wrapper {
+    padding: 20px 48px 28px;
+    gap: 20px;
+  }
+
+  /* =========================================================
+     VISAO EXECUTIVA (TelemetryPage)
+     Layout em faixa: KPIs no topo (4 col) e abaixo
+     Mapa | BESS | Simulacao lado a lado (3 col) para usar a
+     largura e caber na altura de 1080px.
+  ========================================================= */
+  .kpi-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 22px;
+    padding: 18px 48px 0;
+    max-width: 2200px;
+    margin: 0 auto;
+  }
+
+  .kpi-card { min-height: 104px; }
+
+  .telemetry-content {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(360px, 0.8fr) minmax(0, 1.4fr);
+    gap: 22px;
+    padding: 18px 48px 24px;
+    align-items: stretch;
+  }
+
+  /* Os dois blocos internos deixam de ter padding proprio: o grid pai controla. */
+  .telemetry-content .telemetry-main-row {
+    display: contents;
+    padding: 0;
+  }
+
+  .telemetry-content .simulation-row {
+    padding: 0;
+    min-width: 0;
+  }
+
+  /* Mapa e BESS voltam a ser colunas independentes dentro do grid pai. */
+  .telemetry-content .map-panel { min-width: 0; }
+
+  /* Alturas ajustadas para caber em 1080px. */
+  .map-panel-body { min-height: 520px; }
+  .sim-output-chart { height: 560px; }
+  .storage-battery-svg { height: 260px; }
+
+  /* Painel de simulacao acompanha a altura da faixa. */
+  .simulation-row .sim-output {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .simulation-row .sim-output-chart { flex: 1 1 auto; height: auto; min-height: 520px; }
+
+  /* =========================================================
+     VISAO DETALHADA (HomePage)
+  ========================================================= */
+  .home-panel { padding: 22px 24px 20px; }
+
+  .pipeline-steps {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 20px;
+  }
+
+  /* Grafico previsto vs. observado ganha bem mais largura que os Key Outputs. */
+  .forecast-grid {
+    grid-template-columns: minmax(0, 2.4fr) minmax(360px, 0.8fr);
+    gap: 24px;
+  }
+
+  .home-chart { height: 460px; }
+
+  .metric-box strong { font-size: 30px; }
+  .metric-box { min-height: 104px; }
+
+  /* Legibilidade geral em telas grandes. */
+  .kpi-card-title { font-size: 11px; }
+  .kpi-donut-value { font-size: 30px; }
+  .kpi-big { font-size: 32px; }
+  .sim-output-title { font-size: 16px; }
+  .map-panel-title { font-size: 14px; }
+  .storage-title { font-size: 16px; }
+}
+
+/* ---- 32:9 muito largo (>= 3200px): reforca a faixa unica e limita alturas
+   ainda mais para caber com folga em 1080px de altura. -------------------- */
+@media (min-width: 3200px) {
+  .map-panel-body { min-height: 620px; }
+  .sim-output-chart { height: 640px; }
+  .simulation-row .sim-output-chart { min-height: 600px; }
+  .home-chart { height: 520px; }
+}

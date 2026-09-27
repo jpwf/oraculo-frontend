@@ -4,8 +4,6 @@ import Skeleton from './Skeleton'
 const formatBRL = (value) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value) || 0)
 
-// Painel "Estado de Armazenamento (BESS)" (foto 1, coluna direita).
-// Usa a bateria vertical SVG + metricas de absorcao/recuperado/recarga.
 export default function StoragePanel({ storage, loading = false }) {
   const s = storage || {}
 
@@ -79,10 +77,7 @@ export default function StoragePanel({ storage, loading = false }) {
         </div>
       </div>
 
-      <div className="storage-footer">
-        <span className="storage-ready">Prontidão VPP: <strong>{s.prontidaoVpp}</strong></span>
-        <button type="button" className="storage-dispatch-btn">DESPACHAR BESS</button>
-      </div>
+      
     </aside>
   )
 }

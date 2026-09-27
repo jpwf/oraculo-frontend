@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { normalizeTelemetryPayload } from '../utils/normalizeTelemetry'
 
-// Ponto 2B: hook que normaliza o payload de telemetria dentro de um Web Worker,
-// tirando o parse pesado da main thread. Se o Worker nao estiver disponivel
-// (ambiente sem suporte), cai para normalizacao sincrona sem quebrar a UI.
 export function useNormalizedTelemetry() {
   const [normalized, setNormalized] = useState(null)
   const workerRef = useRef(null)
@@ -20,7 +17,6 @@ export function useNormalizedTelemetry() {
         type: 'module',
       })
     } catch {
-      // Sem suporte a Worker: o fallback sincrono no normalize() cobre.
       return undefined
     }
 
@@ -47,7 +43,6 @@ export function useNormalizedTelemetry() {
       return
     }
 
-    // Fallback: sem worker, normaliza na main thread.
     setNormalized(normalizeTelemetryPayload(payload))
   }, [])
 

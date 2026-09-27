@@ -51,8 +51,7 @@ function Header({
 }) {
   const location = useLocation()
   const navigate = useNavigate()
-  // /telemetry = Visao Detalhada; demais = Visao Executiva.
-  const routeMode = location.pathname.startsWith('/telemetry') ? 'Visão Detalhada' : 'Visão Executiva'
+  const routeMode = location.pathname.startsWith('/telemetry') ? 'Visão Executiva' : 'Visão Detalhada'
   const [selectedMode, setSelectedMode] = useState(routeMode || defaultMode)
   const [latencyMs] = useState(initialLatency)
   const [utcTime, setUtcTime] = useState(() => formatUtcDate(new Date()))
@@ -74,7 +73,7 @@ function Header({
   const handleModeChange = (option) => {
     setSelectedMode(option)
 
-    if (option === 'Visão Detalhada') {
+    if (option === 'Visão Executiva') {
       navigate('/telemetry')
       return
     }

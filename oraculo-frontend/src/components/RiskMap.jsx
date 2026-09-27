@@ -2,12 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as echarts from 'echarts';
 import { mmgdLevelColors, ufToStateName } from '../utils/normalizeTelemetry';
 
-// nome do estado (GeoJSON) -> UF, para o clique no geo.
 const stateNameToUf = Object.fromEntries(
   Object.entries(ufToStateName).map(([uf, name]) => [name, uf])
 );
 
-// Ray-casting: ponto [lon,lat] dentro de um anel de vertices.
 const pointInRing = (point, ring) => {
   const [x, y] = point;
   let inside = false;
@@ -23,7 +21,6 @@ const pointInGeometry = (point, geometry) => {
   if (geometry.type === 'MultiPolygon') return geometry.coordinates.some((poly) => pointInRing(point, poly[0]));
   return false;
 };
-// UF (sigla) do estado do GeoJSON que contem a coordenada.
 const ufFromCoord = (point, features) => {
   if (!point || !Array.isArray(features)) return null;
   for (const feature of features) {
@@ -52,7 +49,6 @@ const resourceIcons = {
   DEFAULT: 'circle',
 };
 
-// Rotulo generico por tipo para a legenda (nao o nome de um recurso especifico).
 const resourceTypeLabels = {
   WIND: 'Wind',
   SOLAR: 'Solar',
@@ -63,8 +59,6 @@ const resourceTypeLabels = {
   DEFAULT: 'Resource',
 };
 
-// Funcoes puras em escopo de modulo: nao dependem de props/state,
-// nao sao recriadas a cada render (evita dependencia instavel no useMemo).
 const normalizeCoordinates = (value) => {
   if (Array.isArray(value) && value.length >= 2) {
     return [Number(value[0]), Number(value[1])];
@@ -140,8 +134,6 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
   const criticalRef = useRef(null);
 
   const [loading, setLoading] = useState(true);
-  // Vira true quando a instancia do ECharts esta pronta (apos carregar o GeoJSON).
-  // Usado para disparar o desenho das series assim que o chart existir.
   const [chartReady, setChartReady] = useState(false);
 
   const resourceList = useMemo(() => normalizeResources(resources), [resources]);
@@ -155,12 +147,9 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
           { label: 'Low Risk', value: '18%', color: '#38bdf8' },
         ];
 
-  // Tratamento para garantir coordenadas válidas (Sobradinho / NE)
   const safeLon = Number.isFinite(coordinates?.[0]) ? coordinates[0] : -40.5;
   const safeLat = Number.isFinite(coordinates?.[1]) ? coordinates[1] : -9.41;
 
-  // Ponto critico vem do cruzamento de coordenadas (calculado no normalizador).
-  // Coordenada do ponto: a do criticalPoint, senao o proprio centro de risco.
   const critical = useMemo(() => {
     const cp = criticalPoint || {};
     const coords = normalizeCoordinates(cp.coordinates) || [safeLon, safeLat];
@@ -174,7 +163,6 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
     };
   }, [criticalPoint, safeLon, safeLat]);
 
-  // Legenda por TIPO (rotulo generico), nao pelo nome de um recurso especifico.
   const resourceLegend = Array.from(
     new Map(
       resourceList.map((resource) => {
@@ -191,8 +179,6 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
     ).values()
   );
 
-  // Legenda exibida: no modo MMGD inclui os niveis de geracao (Baixa/Media/Alta)
-  // + os tipos de recurso; no modo curtailment mostra so os tipos.
   const legendItems = useMemo(() => {
     if (mode !== 'mmgd') return resourceLegend;
     return [
@@ -220,7 +206,6 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
         const type = String(resource.type || resource.kind || resource.category || 'DEFAULT').toUpperCase();
         const icon = resourceIcons[type] || resourceIcons.DEFAULT;
 
-        // Prioriza a cor por TIPO (SOLAR_PLANT -> ambar) sobre o fallback do util.
         const pointColor = resourceColors[type] || resource.color || resourceColors.DEFAULT;
 
         return {
@@ -243,9 +228,6 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
       .filter(Boolean);
   }, [resourceList]);
 
-  // Poligonos desenhados sobre o mapa: no modo MMGD usa as zonas MMGD (por nivel
-  // de geracao); no modo curtailment usa as zonas de risco.
-  // Poligonos de zona (custom series) so no modo curtailment (risco).
   const zoneList = useMemo(() => {
     const source = mode === 'curtailment' ? riskZones : [];
     return (Array.isArray(source) ? source : [])
@@ -259,7 +241,6 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
       .filter(Boolean);
   }, [mode, riskZones]);
 
-  // No modo MMGD: colore os ESTADOS REAIS (regions do geo) por nivel de geracao.
   const geoRegions = useMemo(() => {
     if (mode !== 'mmgd') return [];
     return Object.entries(mmgdLevels || {})
@@ -276,14 +257,11 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
       .filter(Boolean);
   }, [mode, mmgdLevels]);
 
-  // Dados da custom series de zonas (memoizado para nao recriar a cada render).
   const zoneData = useMemo(
     () => zoneList.map((zone) => ({ name: zone.label, value: zone.curtailmentProb, zone })),
     [zoneList]
   );
 
-  // Ponto 3: cria a instancia do ECharts e registra o mapa do Brasil UMA vez.
-  // O GeoJSON so e carregado/registrado uma vez; a instancia nunca e recriada.
   useEffect(() => {
     let isMounted = true;
 
@@ -300,21 +278,17 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
 
       if (!isMounted) return;
 
-      // Renderizador Canvas para alta performance e fluidez a 60 FPS
       const chart = echarts.init(mapRef.current, null, { renderer: 'canvas' });
       chartInstanceRef.current = chart;
 
       chart.setOption({
         backgroundColor: 'transparent',
-        // Tooltip nativo desligado: o modal do ponto critico (curtailment) e o
-        // tooltip de estado (MMGD) sao tratados por um tooltip DOM customizado
-        // (mousemove) com deteccao por proximidade de pixel (mínima area).
         tooltip: { show: false },
         geo: {
           map: 'brasil',
-          roam: true, // Habilita Zoom e Pan fluidos
+          roam: true,
           zoom: 2.9,
-          center: [-41.5, -9.2], // Centrado no cluster de recursos do NE
+          center: [-41.5, -9.2],
           scaleLimit: { min: 0.8, max: 10 },
           label: { show: false },
           itemStyle: {
@@ -332,7 +306,6 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
       });
 
       setLoading(false);
-      // Sinaliza que a instancia existe -> dispara o effect que desenha as series.
       setChartReady(true);
     }
 
@@ -352,14 +325,12 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
     };
   }, []);
 
-  // Clique numa REGIAO (poligono MMGD) -> atualiza os dados do estado da zona.
   useEffect(() => {
     const chart = chartInstanceRef.current;
     if (!chart || !chartReady) return;
 
     const handleClick = (params) => {
       if (typeof onSelectState !== 'function') return;
-      // Clique no ESTADO real (geo) -> UF pelo nome; ou na zona (curtailment).
       let uf = params?.data?.zone?.uf;
       if (!uf && params?.componentType === 'geo' && params?.name) {
         uf = stateNameToUf[params.name];
@@ -371,15 +342,10 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
     return () => chart.off('click', handleClick);
   }, [chartReady, onSelectState]);
 
-  // Hover de estado (modo MMGD): tooltip preciso via pixel -> UF (menor area).
-  // Mantem o ponto critico acessivel ao handler de mousemove (curtailment).
   useEffect(() => {
     criticalRef.current = critical;
   }, [critical]);
 
-  // Hover customizado (mínima area via pixel):
-  //  - MMGD: mostra o estado sob o cursor (pixel -> UF, point-in-polygon).
-  //  - Curtailment: mostra o modal do ponto critico quando o cursor esta perto dele.
   useEffect(() => {
     const chart = chartInstanceRef.current;
     const tip = tooltipRef.current;
@@ -395,7 +361,6 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
       lastRun = now;
       const pixel = [event.offsetX, event.offsetY];
 
-      // No curtailment: prioridade para o modal do ponto critico (proximidade).
       if (mode === 'curtailment') {
         const cp = criticalRef.current;
         if (cp && Array.isArray(cp.coordinates)) {
@@ -421,10 +386,8 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
             }
           }
         }
-        // Fora do ponto critico: cai no hover de estado (mesmo do MMGD).
       }
 
-      // Hover de estado (MMGD e curtailment): UF real via pixel -> point-in-polygon.
       if (!chart.containPixel({ geoIndex: 0 }, pixel)) { hideTip(); return; }
       const lonLat = chart.convertFromPixel({ geoIndex: 0 }, pixel);
       const uf = Array.isArray(lonLat) ? ufFromCoord(lonLat, geoFeaturesRef.current) : null;
@@ -445,22 +408,18 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
     };
   }, [chartReady, mode]);
 
-  // Aplica a coloracao por nivel MMGD nos estados reais (regions do geo).
   useEffect(() => {
     const chart = chartInstanceRef.current;
     if (!chart || !chartReady) return;
     chart.setOption({ geo: { regions: geoRegions } });
   }, [geoRegions, chartReady]);
 
-  // Ponto 3: atualiza APENAS as series quando os dados mudam, via setOption
-  // (merge incremental) — sem recriar a instancia nem re-registrar o mapa.
   useEffect(() => {
     const chart = chartInstanceRef.current;
     if (!chart) return;
 
     const [critLon, critLat] = critical.coordinates;
 
-    // Zonas de risco (poligonos "shapefile") desenhadas sobre o geo via custom series.
     const hexToRgba = (hex, alpha) => {
       const h = String(hex).replace('#', '');
       const r = parseInt(h.substring(0, 2), 16);
@@ -474,7 +433,6 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
       type: 'custom',
       coordinateSystem: 'geo',
       z: 6,
-      // Poligonos clicaveis (atualiza dados do estado); sem hover.
       silent: false,
       emphasis: { disabled: true },
       data: zoneData,
@@ -485,7 +443,6 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
         if (!pts.length) return null;
         const color = zone.color || '#94a3b8';
 
-        // Centroide (media dos vertices) para posicionar o rotulo da UF.
         const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
         const cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
 
@@ -520,13 +477,9 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
           ],
         };
       },
-      // Sem tooltip (interacao e por clique).
       tooltip: { show: false },
     };
 
-    // Linhas + ponto critico so aparecem no modo "Risco de Curtailment".
-    // As zonas (poligonos) sao renderizadas nos dois modos (zoneSeries abaixo).
-    // Alvos das linhas: alguns recursos ao redor do ponto critico (foto 2).
     const resTargets = resourceScatterData
       .map((r) => r.value)
       .filter((v) => Array.isArray(v));
@@ -534,7 +487,6 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
     const redTargets = resTargets.slice(1, 3);
 
     const curtailmentSeries = mode === 'curtailment' ? [
-      // Linha solida ciano (conexao principal).
       {
         type: 'lines',
         coordinateSystem: 'geo',
@@ -542,7 +494,6 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
         lineStyle: { color: '#38bdf8', width: 2.5, opacity: 0.9 },
         z: 4,
       },
-      // Linhas tracejadas vermelhas (rotas de risco a partir do ponto critico).
       {
         type: 'lines',
         coordinateSystem: 'geo',
@@ -552,21 +503,15 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
       },
       {
         name: 'Ponto Crítico',
-        type: 'effectScatter',
+        type: 'scatter',
         coordinateSystem: 'geo',
         data: [{ name: critical.name, value: [critLon, critLat, 100], critical }],
-        symbolSize: 16,
-        showEffectOn: 'render',
-        rippleEffect: {
-          brushType: 'stroke',
-          scale: 6,
-          period: 3,
-          color: '#f97316',
-        },
+        symbol: 'circle',
+        symbolSize: 14,
         itemStyle: {
           color: '#ef4444',
-          shadowBlur: 30,
-          shadowColor: 'rgba(249, 115, 22, 0.9)',
+          borderColor: 'rgba(255,255,255,0.85)',
+          borderWidth: 1.5,
         },
         z: 12,
       },
@@ -580,12 +525,9 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
           name: 'Recursos',
           type: 'scatter',
           coordinateSystem: 'geo',
-          // Cada ponto ja traz symbol/symbolSize/itemStyle proprios no data.
-          // No modo MMGD os recursos ficam maiores/destacados (visao de geracao).
           data: resourceScatterData,
           z: 10,
           symbolSize: mode === 'mmgd' ? 20 : undefined,
-          // No modo MMGD os icones nao capturam clique: o clique vai para a REGIAO.
           silent: mode === 'mmgd',
           emphasis: { disabled: true },
           tooltip: { show: false },
@@ -596,7 +538,6 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: '190px', backgroundColor: '#070c14', borderRadius: '8px', display: 'flex', flexDirection: 'column' }}>
-      {/* Tooltip de estado (modo MMGD), posicionado no cursor. */}
       <div
         ref={tooltipRef}
         style={{

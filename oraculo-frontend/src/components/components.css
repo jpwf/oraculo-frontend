@@ -169,7 +169,35 @@
     justify-content: flex-start;
   }
 
+  .left-side {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
   .right-side {
     flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .header {
+    padding: 14px 12px;
+    gap: 12px;
+  }
+
+  /* Switch de modo ocupa a largura toda e divide os botões igualmente. */
+  .type-switch {
+    width: 100%;
+    border-radius: 8px;
+  }
+
+  .switch-button {
+    flex: 1;
+    padding: 10px 8px;
+    text-align: center;
+  }
+
+  .right-side {
+    gap: 12px;
   }
 }

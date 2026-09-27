@@ -1,12 +1,7 @@
-// Bateria vertical em SVG (foto 2) para o painel de armazenamento (BESS).
-// - `level`: % de carga atual (preenchimento solido, base da bateria)
-// - `allocation`: % topo da faixa hachurada (nivel + margem de absorcao)
-// Renderiza corpo + bico + preenchimento + faixa hachurada de "Alocacao Constrained Off".
 export default function BatteryGauge({ level = 48, allocation = 72, width = 150, height = 230 }) {
   const clampedLevel = Math.max(0, Math.min(100, Number(level) || 0))
   const clampedAlloc = Math.max(clampedLevel, Math.min(100, Number(allocation) || 0))
 
-  // Geometria do corpo da bateria (area interna util).
   const bodyX = width * 0.18
   const bodyW = width * 0.64
   const bodyY = height * 0.12
@@ -17,14 +12,12 @@ export default function BatteryGauge({ level = 48, allocation = 72, width = 150,
   const innerW = bodyW - innerPad * 2
   const innerH = bodyH - innerPad * 2
 
-  // Alturas (de baixo para cima) do preenchimento e da faixa de margem.
   const levelH = (clampedLevel / 100) * innerH
   const levelY = innerY + innerH - levelH
   const allocH = (clampedAlloc / 100) * innerH
   const allocY = innerY + innerH - allocH
-  const marginH = allocH - levelH // faixa hachurada entre nivel e alocacao
+  const marginH = allocH - levelH
 
-  // Bico da bateria (topo).
   const capW = width * 0.24
   const capH = height * 0.045
   const capX = width / 2 - capW / 2
@@ -40,7 +33,6 @@ export default function BatteryGauge({ level = 48, allocation = 72, width = 150,
       style={{ display: 'block', maxWidth: `${width}px`, margin: '0 auto' }}
     >
       <defs>
-        {/* Hachura verde para a faixa de alocacao/margem. */}
         <pattern id="battery-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
           <rect width="8" height="8" fill="rgba(16, 185, 129, 0.22)" />
           <line x1="0" y1="0" x2="0" y2="8" stroke="rgba(52, 211, 153, 0.55)" strokeWidth="3" />
@@ -57,10 +49,8 @@ export default function BatteryGauge({ level = 48, allocation = 72, width = 150,
         </filter>
       </defs>
 
-      {/* Bico */}
       <rect x={capX} y={capY} width={capW} height={capH} rx="3" fill="#1e293b" stroke="#334155" strokeWidth="1.5" />
 
-      {/* Corpo (contorno) */}
       <rect
         x={bodyX}
         y={bodyY}
@@ -73,23 +63,17 @@ export default function BatteryGauge({ level = 48, allocation = 72, width = 150,
         filter="url(#battery-glow)"
       />
 
-      {/* Conteudo interno recortado */}
       <g clipPath="url(#battery-inner)">
-        {/* Fundo interno */}
         <rect x={innerX} y={innerY} width={innerW} height={innerH} fill="rgba(255,255,255,0.03)" />
 
-        {/* Preenchimento de carga atual (claro, base) */}
         <rect x={innerX} y={levelY} width={innerW} height={levelH} fill="#e8edf5" />
 
-        {/* Faixa hachurada de alocacao/margem (verde, acima do nivel) */}
         {marginH > 0 && (
           <rect x={innerX} y={allocY} width={innerW} height={marginH} fill="url(#battery-hatch)" />
         )}
 
-        {/* Linha divisoria no topo da carga */}
         <line x1={innerX} y1={levelY} x2={innerX + innerW} y2={levelY} stroke="#34d399" strokeWidth="2" />
 
-        {/* Rotulo da faixa (topo) */}
         {marginH > 22 && (
           <text
             x={innerX + innerW / 2}
@@ -104,7 +88,6 @@ export default function BatteryGauge({ level = 48, allocation = 72, width = 150,
         )}
       </g>
 
-      {/* % grande da carga atual, posicionado mais acima dentro do preenchimento */}
       <text
         x={width / 2}
         y={levelY + Math.min(levelH * 0.4, innerH * 0.32) + 8}
