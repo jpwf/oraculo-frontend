@@ -138,9 +138,11 @@ html, body {
 
 .prediction-info {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 18px;
-  padding: 18px 18px 0;
+  /* Cards mais largos e com mais respiro entre si, sem alterar a altura. */
+  grid-template-columns: repeat(4, minmax(0, 300px));
+  justify-content: start;
+  gap: 22px;
+  padding: 12px 18px 0;
   width: 100%;
   box-sizing: border-box;
 }
@@ -153,13 +155,15 @@ html, body {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 10px;
   min-width: 0;
-  padding: 18px 18px 12px;
-  font-size: 13px;
+  padding: 8px 9px;
+  font-size: 11px;
   outline: none;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 240px;
+  gap: 6px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .curtailment-header,
@@ -180,69 +184,77 @@ html, body {
 .cause-header {
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 18px;
+  margin-bottom: 6px;
 }
 
 .energy-risk-title-wrap,
 .curtailment-title-wrap {
   display: flex;
   align-items: center;
-  gap: 10px;
-  width: 100%;
+  gap: 1%;
+  width: 80%;
   justify-content: space-between;
 }
 
 .donut-chart {
-  width: 74px;
-  height: 74px;
-  min-width: 74px;
-  min-height: 74px;
+  width: 46px;
+  height: 46px;
+  min-width: 46px;
+  min-height: 46px;
   border-radius: 50%;
   flex-shrink: 0;
+  overflow: hidden;
 }
 
 .curtailment-data {
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
+  justify-content: flex-start;
+  gap: 8px;
 }
 
 .curtailment-values {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 10px;
+  gap: 5px;
   flex: 1;
+  min-width: 0;
 }
 
 .curtailment-values h2 {
   margin: 0;
   color: #f3f6fb;
-  font-size: 34px;
+  font-size: 13px;
   line-height: 1;
   font-weight: 700;
+}
+
+.danger-text,
+.safe-text {
+  padding: 3px 6px;
+  border-radius: 4px;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+  font-size: 8.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  word-break: break-word;
 }
 
 .danger-text {
   color: #ff5a5a;
   background: rgba(239, 68, 68, 0.08);
   border: 1px solid #ff5a5a;
-  padding: 8px 12px;
-  border-radius: 4px;
-  display: inline-block;
-  font-size: 12px;
-  font-weight: 600;
 }
 
 .safe-text {
   color: #22c55e;
   background: rgba(34, 197, 94, 0.08);
   border: 1px solid #22c55e;
-  padding: 8px 12px;
-  border-radius: 4px;
-  display: inline-block;
-  font-size: 12px;
-  font-weight: 600;
 }
 
 .curtailment-title-wrap {
@@ -323,7 +335,7 @@ html, body {
 .cause-header h3 {
   margin: 0;
   color: #d3d3d3;
-  font-size: 12px;
+  font-size: 9px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-weight: 600;
@@ -332,21 +344,21 @@ html, body {
 .energy-risk-value,
 .highest-risk-value {
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
 }
 
 .watts-values {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 5px;
 }
 
 .watts-values h1 {
   margin: 0;
-  font-size: 34px;
+  font-size: 18px;
   line-height: 1;
   color: #f3f6fb;
 }
@@ -361,30 +373,30 @@ html, body {
   align-items: center;
   justify-content: space-between;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
-  padding-top: 12px;
+  padding-top: 6px;
   margin-top: auto;
 }
 
 .energy-risk-window p {
   color: #d0d8e6;
-  font-size: 12px;
+  font-size: 9px;
 }
 
 .energy-risk-window h3 {
   color: #f3f6fb;
-  font-size: 14px;
+  font-size: 10px;
 }
 
 .highest-risk-node {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 6px;
 }
 
 .highest-risk-node h1 {
   margin: 0;
-  font-size: 30px;
+  font-size: 16px;
   line-height: 1.2;
   color: #f3f6fb;
 }
@@ -397,62 +409,77 @@ html, body {
 }
 
 .impacted-assets {
-  margin-top: 12px;
+  margin-top: 6px;
 }
 
 .curtailment-metrics {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  padding-top: 12px;
-  margin-top: 14px;
+  gap: 6px;
+  padding-top: 6px;
+  margin-top: 7px;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .curtailment-metrics p {
   margin: 0;
   color: #d0d8e6;
-  font-size: 12px;
+  font-size: 9px;
 }
 
 .cause {
-  padding: 18px 18px 16px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+}
+
+.cause-header h3 {
+  font-size: 12px;
 }
 
 .cause-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
+}
+
+/* Empurra as barras para o rodape (mesma ideia da foto 1). */
+.cause-list {
+  margin-top: auto;
 }
 
 .cause-title {
   margin: 0 0 14px;
   color: #f3f6fb;
-  font-size: clamp(1.35rem, 1.5vw, 1.9rem);
-  line-height: 1.08;
-  letter-spacing: -0.04em;
+  font-size: clamp(1.05rem, 1.2vw, 1.4rem);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
   font-weight: 700;
 }
 
 .cause-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
 .cause-row {
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr) 42px;
+  grid-template-columns: 100px minmax(0, 1fr) 42px;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
+  font-size: 12px;
 }
 
 .cause-label,
 .cause-value {
   color: #e5edf9;
-  font-size: 15px;
+  font-size: 12px;
   line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cause-value {
@@ -463,7 +490,7 @@ html, body {
 .cause-bar-track {
   position: relative;
   width: 100%;
-  height: 8px;
+  height: 7px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
   overflow: hidden;
@@ -480,7 +507,7 @@ html, body {
 
 .risks-details {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 18px;
   padding: 18px;
   width: 100%;
@@ -623,12 +650,12 @@ html, body {
 
 .risk-chart-wrap {
   width: 100%;
-  min-height: 100px;
+  min-height: 180px;
 }
 
 .risk-chart-svg {
   width: 100%;
-  height: 100px;
+  height: 180px;
   display: block;
 }
 
@@ -2279,3 +2306,404 @@ html, body {
     background-position: 0 50%;
   }
 }
+
+/* ===================== Redesign TelemetryPage (fotos) ===================== */
+
+/* Linha 1 — KPIs do topo (PT) */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  padding: 14px 18px 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.kpi-card {
+  background: #0b1526;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 96px;
+  box-sizing: border-box;
+}
+
+.kpi-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.kpi-card-title {
+  color: #8ea1b8;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.3;
+}
+
+.kpi-icon-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  flex-shrink: 0;
+  background: rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  color: #cbd6e6;
+}
+.kpi-icon-box.amber { background: rgba(245, 158, 11, 0.14); border-color: rgba(245, 158, 11, 0.5); color: #f5a524; }
+.kpi-icon-box.cyan { background: rgba(56, 189, 248, 0.14); border-color: rgba(56, 189, 248, 0.5); color: #5ed7ff; }
+
+.kpi-donut-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.kpi-donut {
+  width: 60px;
+  height: 60px;
+  min-width: 60px;
+  min-height: 60px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.kpi-donut-value {
+  margin: 0;
+  color: #f3f6fb;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.kpi-big {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: #f3f6fb;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.kpi-unit {
+  font-size: 13px;
+  font-weight: 600;
+  color: #5ed7ff;
+}
+
+.kpi-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: #8ea1b8;
+  margin-top: auto;
+}
+.kpi-foot strong { color: #f5a524; font-weight: 700; }
+
+/* Linha 2 — Mapa + Painel BESS */
+.telemetry-main-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.9fr) minmax(320px, 1fr);
+  gap: 16px;
+  padding: 16px 18px 0;
+  width: 100%;
+  box-sizing: border-box;
+  align-items: stretch;
+}
+
+.map-panel {
+  background: #0b1526;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.map-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.map-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #eaf1fb;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.map-title-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 8px #34d399;
+}
+
+.map-switch {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.map-switch-btn {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(11, 21, 38, 0.9);
+  color: #cbd6e6;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.map-switch-btn:hover { border-color: rgba(148, 163, 184, 0.55); }
+.map-switch-btn.active {
+  background: rgba(245, 158, 11, 0.16);
+  border-color: #f5a524;
+  color: #f7c463;
+}
+
+.map-panel-body {
+  flex: 1;
+  min-height: 380px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* Painel BESS (Estado de Armazenamento) */
+.storage-panel {
+  background: #0b1526;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.storage-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.storage-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.storage-bullet {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 8px #34d399;
+  flex-shrink: 0;
+}
+
+.storage-title {
+  color: #eaf1fb;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.storage-region-tag {
+  border: 1px solid rgba(52, 211, 153, 0.5);
+  color: #34d399;
+  background: rgba(52, 211, 153, 0.1);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.storage-sub {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 10.5px;
+  color: #8ea1b8;
+}
+.storage-avail { color: #34d399; font-weight: 700; text-align: right; }
+
+.storage-capacity {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #8ea1b8;
+}
+.storage-capacity strong { color: #f3f6fb; font-size: 13px; }
+
+.storage-battery-block {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(8, 14, 23, 0.5);
+}
+
+.storage-battery-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.storage-battery-label {
+  color: #8ea1b8;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  max-width: 60%;
+}
+
+.storage-battery-stats {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.storage-soc { color: #34d399; font-size: 18px; font-weight: 700; }
+.storage-absorb { color: #8ea1b8; font-size: 10px; }
+
+.storage-battery-svg {
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.storage-battery-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  font-size: 10px;
+  color: #cbd6e6;
+}
+.storage-battery-legend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 4px;
+}
+.storage-battery-legend .dot-charge { background: #e8edf5; }
+.storage-battery-legend .dot-absorb { background: #34d399; }
+
+.storage-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.storage-metric-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.storage-metric-label {
+  display: flex;
+  flex-direction: column;
+  color: #cbd6e6;
+  font-size: 11.5px;
+}
+.storage-metric-label small { color: #64748b; font-size: 9px; }
+.storage-metric-label .m-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #64748b;
+  margin-right: 6px;
+}
+.storage-metric-label .m-dot.green { background: #34d399; }
+.storage-metric-label .m-dot.amber { background: #f5a524; }
+
+.storage-metric-value {
+  color: #f3f6fb;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+}
+.storage-metric-value.money { color: #34d399; }
+
+.storage-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 12px;
+  margin-top: auto;
+}
+.storage-ready { color: #8ea1b8; font-size: 11px; }
+.storage-ready strong { color: #34d399; }
+
+.storage-dispatch-btn {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(52, 211, 153, 0.12);
+  color: #34d399;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.storage-dispatch-btn:hover { background: rgba(52, 211, 153, 0.2); border-color: #34d399; }
+
+/* Nota de estado selecionado no mapa MMGD */
+.map-selected-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #8ea1b8;
+  padding: 2px 2px 8px;
+}
+.map-selected-note strong { color: #f5a524; }
+.map-clear-btn {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: transparent;
+  color: #cbd6e6;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.map-clear-btn:hover { border-color: rgba(148, 163, 184, 0.55); }

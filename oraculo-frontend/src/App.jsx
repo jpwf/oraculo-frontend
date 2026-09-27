@@ -89,8 +89,8 @@ function HomePage() {
         initialLatency={18}
         title="ORÁCULO"
         dispatchText="ISO DISPATCH V4.18"
-        modeOptions={['VPP', 'MODELS']}
-        defaultMode="MODELS"
+        modeOptions={['Visão Detalhada', 'Visão Executiva']}
+        defaultMode="Visão Executiva"
       />
 
       <div className="system-infos">

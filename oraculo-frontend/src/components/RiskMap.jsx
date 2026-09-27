@@ -1,5 +1,36 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as echarts from 'echarts';
+import { mmgdLevelColors, ufToStateName } from '../utils/normalizeTelemetry';
+
+// nome do estado (GeoJSON) -> UF, para o clique no geo.
+const stateNameToUf = Object.fromEntries(
+  Object.entries(ufToStateName).map(([uf, name]) => [name, uf])
+);
+
+// Ray-casting: ponto [lon,lat] dentro de um anel de vertices.
+const pointInRing = (point, ring) => {
+  const [x, y] = point;
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+};
+const pointInGeometry = (point, geometry) => {
+  if (!geometry) return false;
+  if (geometry.type === 'Polygon') return pointInRing(point, geometry.coordinates[0]);
+  if (geometry.type === 'MultiPolygon') return geometry.coordinates.some((poly) => pointInRing(point, poly[0]));
+  return false;
+};
+// UF (sigla) do estado do GeoJSON que contem a coordenada.
+const ufFromCoord = (point, features) => {
+  if (!point || !Array.isArray(features)) return null;
+  for (const feature of features) {
+    if (pointInGeometry(point, feature.geometry)) return feature.properties?.sigla || null;
+  }
+  return null;
+};
 
 const resourceColors = {
   WIND: '#38bdf8',
@@ -101,9 +132,13 @@ const normalizeResources = (source) => {
     });
 };
 
-export default function RiskMap({ coordinates, points = [], resources = [], criticalPoint = null, riskZones = [] }) {
+export default function RiskMap({ coordinates, points = [], resources = [], criticalPoint = null, riskZones = [], mmgdLevels = {}, mode = 'curtailment', onSelectState = null }) {
   const mapRef = useRef(null);
   const chartInstanceRef = useRef(null);
+  const geoFeaturesRef = useRef(null);
+  const tooltipRef = useRef(null);
+  const criticalRef = useRef(null);
+
   const [loading, setLoading] = useState(true);
   // Vira true quando a instancia do ECharts esta pronta (apos carregar o GeoJSON).
   // Usado para disparar o desenho das series assim que o chart existir.
@@ -156,6 +191,20 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
     ).values()
   );
 
+  // Legenda exibida: no modo MMGD inclui os niveis de geracao (Baixa/Media/Alta)
+  // + os tipos de recurso; no modo curtailment mostra so os tipos.
+  const legendItems = useMemo(() => {
+    if (mode !== 'mmgd') return resourceLegend;
+    return [
+      { type: 'LVL_LOW', label: 'Baixa Geração MMGD', color: mmgdLevelColors.LOW },
+      { type: 'LVL_MEDIUM', label: 'Média Geração MMGD', color: mmgdLevelColors.MEDIUM },
+      { type: 'LVL_HIGH', label: 'Alta Geração MMGD', color: mmgdLevelColors.HIGH },
+      { type: 'WIND', label: 'Eólica', color: resourceColors.WIND },
+      { type: 'SOLAR', label: 'Solar', color: resourceColors.SOLAR },
+      { type: 'BESS', label: 'BESS', color: resourceColors.BESS },
+    ];
+  }, [mode, resourceLegend]);
+
   const resourceScatterData = useMemo(() => {
     return resourceList
       .map((resource) => {
@@ -178,6 +227,7 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
           name: resource.label || resource.name || type,
           value: [lon, lat],
           type,
+          estado: resource.estado || resource.uf,
           color: pointColor,
           symbol: icon,
           symbolSize: 16,
@@ -193,9 +243,12 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
       .filter(Boolean);
   }, [resourceList]);
 
-  // Zonas de risco (poligonos) validas para desenhar sobre o mapa.
+  // Poligonos desenhados sobre o mapa: no modo MMGD usa as zonas MMGD (por nivel
+  // de geracao); no modo curtailment usa as zonas de risco.
+  // Poligonos de zona (custom series) so no modo curtailment (risco).
   const zoneList = useMemo(() => {
-    return (Array.isArray(riskZones) ? riskZones : [])
+    const source = mode === 'curtailment' ? riskZones : [];
+    return (Array.isArray(source) ? source : [])
       .map((zone) => {
         const polygon = (zone.polygon || [])
           .map((pt) => normalizeCoordinates(pt))
@@ -204,7 +257,24 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
         return { ...zone, polygon };
       })
       .filter(Boolean);
-  }, [riskZones]);
+  }, [mode, riskZones]);
+
+  // No modo MMGD: colore os ESTADOS REAIS (regions do geo) por nivel de geracao.
+  const geoRegions = useMemo(() => {
+    if (mode !== 'mmgd') return [];
+    return Object.entries(mmgdLevels || {})
+      .map(([uf, level]) => {
+        const name = ufToStateName[String(uf).toUpperCase()];
+        const color = mmgdLevelColors[String(level).toUpperCase()];
+        if (!name || !color) return null;
+        return {
+          name,
+          itemStyle: { areaColor: `${color}3a`, borderColor: color, borderWidth: 1.4 },
+          emphasis: { itemStyle: { areaColor: `${color}66` } },
+        };
+      })
+      .filter(Boolean);
+  }, [mode, mmgdLevels]);
 
   // Dados da custom series de zonas (memoizado para nao recriar a cada render).
   const zoneData = useMemo(
@@ -220,10 +290,12 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
     async function initChart() {
       if (!mapRef.current) return;
 
+      const geoJsonModule = await import('../assets/resources/brazil-states.json');
+      if (!isMounted) return;
+      const geoJson = geoJsonModule.default || geoJsonModule;
+      geoFeaturesRef.current = geoJson.features || null;
       if (!echarts.getMap('brasil')) {
-        const geoJsonModule = await import('../assets/resources/brazil-states.json');
-        if (!isMounted) return;
-        echarts.registerMap('brasil', geoJsonModule.default || geoJsonModule);
+        echarts.registerMap('brasil', geoJson);
       }
 
       if (!isMounted) return;
@@ -234,46 +306,10 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
 
       chart.setOption({
         backgroundColor: 'transparent',
-        tooltip: {
-          trigger: 'item',
-          backgroundColor: '#0d131d',
-          borderColor: '#ef4444',
-          borderWidth: 1,
-          borderRadius: 10,
-          padding: 14,
-          textStyle: { color: '#f8fafc', fontSize: 12 },
-          formatter: (params) => {
-            if (params.seriesType === 'effectScatter') {
-              const cp = params?.data?.critical || {};
-              const name = cp.name || params.name || 'Critical Node';
-              const severity = cp.severity || 'Critical';
-              const prob = Number.isFinite(Number(cp.curtailmentProb)) ? Number(cp.curtailmentProb) : 78;
-              const volume = Number.isFinite(Number(cp.volumeAtRisk)) ? Number(cp.volumeAtRisk) : 320;
-              const assets = Number.isFinite(Number(cp.affectedAssets)) ? Number(cp.affectedAssets) : 12;
-              return `
-                <div style="font-family: 'Space Mono', ui-monospace, monospace; min-width: 210px;">
-                  <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:10px;">
-                    <span style="font-weight:700; color:#f8fafc; font-size:13px;">
-                      <span style="color:#ef4444;">●</span> ${name}
-                    </span>
-                    <span style="border:1px solid #ef4444; color:#ff6b6b; font-size:10px; padding:2px 8px; border-radius:5px; letter-spacing:0.03em;">${severity}</span>
-                  </div>
-                  <div style="display:flex; justify-content:space-between; color:#8ea1b8; font-size:12px; margin-bottom:3px;">
-                    <span>Curtailment Prob.:</span><strong style="color:#ff6b6b;">${prob}%</strong>
-                  </div>
-                  <div style="display:flex; justify-content:space-between; color:#8ea1b8; font-size:12px; margin-bottom:3px;">
-                    <span>Volume at Risk:</span><strong style="color:#f8fafc;">${volume} MW</strong>
-                  </div>
-                  <div style="display:flex; justify-content:space-between; color:#8ea1b8; font-size:12px; margin-bottom:10px;">
-                    <span>Affected Assets:</span><strong style="color:#f8fafc;">${assets}</strong>
-                  </div>
-                  <div style="color:#f5a524; font-size:12px; font-weight:700;">View risk telemetry &rarr;</div>
-                </div>
-              `;
-            }
-            return params.name || '';
-          },
-        },
+        // Tooltip nativo desligado: o modal do ponto critico (curtailment) e o
+        // tooltip de estado (MMGD) sao tratados por um tooltip DOM customizado
+        // (mousemove) com deteccao por proximidade de pixel (mínima area).
+        tooltip: { show: false },
         geo: {
           map: 'brasil',
           roam: true, // Habilita Zoom e Pan fluidos
@@ -287,11 +323,10 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
             borderWidth: 1,
           },
           emphasis: {
-            itemStyle: {
-              areaColor: '#111d33',
-              borderColor: '#38bdf8',
-            },
+            label: { show: false },
+            itemStyle: { areaColor: '#152238', borderColor: '#38bdf8' },
           },
+          select: { disabled: true },
         },
         series: [],
       });
@@ -317,6 +352,106 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
     };
   }, []);
 
+  // Clique numa REGIAO (poligono MMGD) -> atualiza os dados do estado da zona.
+  useEffect(() => {
+    const chart = chartInstanceRef.current;
+    if (!chart || !chartReady) return;
+
+    const handleClick = (params) => {
+      if (typeof onSelectState !== 'function') return;
+      // Clique no ESTADO real (geo) -> UF pelo nome; ou na zona (curtailment).
+      let uf = params?.data?.zone?.uf;
+      if (!uf && params?.componentType === 'geo' && params?.name) {
+        uf = stateNameToUf[params.name];
+      }
+      if (uf) onSelectState(String(uf).toUpperCase());
+    };
+
+    chart.on('click', handleClick);
+    return () => chart.off('click', handleClick);
+  }, [chartReady, onSelectState]);
+
+  // Hover de estado (modo MMGD): tooltip preciso via pixel -> UF (menor area).
+  // Mantem o ponto critico acessivel ao handler de mousemove (curtailment).
+  useEffect(() => {
+    criticalRef.current = critical;
+  }, [critical]);
+
+  // Hover customizado (mínima area via pixel):
+  //  - MMGD: mostra o estado sob o cursor (pixel -> UF, point-in-polygon).
+  //  - Curtailment: mostra o modal do ponto critico quando o cursor esta perto dele.
+  useEffect(() => {
+    const chart = chartInstanceRef.current;
+    const tip = tooltipRef.current;
+    if (!chart || !chartReady || !tip) return;
+
+    const zr = chart.getZr();
+    const hideTip = () => { tip.style.display = 'none'; };
+
+    let lastRun = 0;
+    const handleMove = (event) => {
+      const now = Date.now();
+      if (now - lastRun < 30) return;
+      lastRun = now;
+      const pixel = [event.offsetX, event.offsetY];
+
+      // No curtailment: prioridade para o modal do ponto critico (proximidade).
+      if (mode === 'curtailment') {
+        const cp = criticalRef.current;
+        if (cp && Array.isArray(cp.coordinates)) {
+          const cpPixel = chart.convertToPixel({ geoIndex: 0 }, cp.coordinates);
+          if (cpPixel) {
+            const d = Math.sqrt((cpPixel[0] - pixel[0]) ** 2 + (cpPixel[1] - pixel[1]) ** 2);
+            if (d <= 18) {
+              tip.innerHTML = `
+                <div style="font-family:'Space Mono',ui-monospace,monospace;min-width:220px;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:12px;">
+                    <span style="font-weight:700;color:#f8fafc;font-size:14px;"><span style="color:#ef4444;">●</span> ${cp.name || 'NE — Sobradinho'}</span>
+                    <span style="border:1px solid #ef4444;color:#ff6b6b;font-size:11px;padding:2px 10px;border-radius:5px;">${cp.severity || 'Critical'}</span>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;color:#8ea1b8;font-size:13px;margin-bottom:4px;"><span>Curtailment Prob.:</span><strong style="color:#ff6b6b;">${cp.curtailmentProb ?? 78}%</strong></div>
+                  <div style="display:flex;justify-content:space-between;color:#8ea1b8;font-size:13px;margin-bottom:4px;"><span>Volume at Risk:</span><strong style="color:#f8fafc;">${cp.volumeAtRisk ?? 320} MW</strong></div>
+                  <div style="display:flex;justify-content:space-between;color:#8ea1b8;font-size:13px;margin-bottom:12px;"><span>Affected Assets:</span><strong style="color:#f8fafc;">${cp.affectedAssets ?? 12}</strong></div>
+                  <div style="color:#f5a524;font-size:13px;font-weight:700;">View risk telemetry &rarr;</div>
+                </div>`;
+              tip.style.display = 'block';
+              tip.style.left = `${pixel[0] + 14}px`;
+              tip.style.top = `${pixel[1] + 14}px`;
+              return;
+            }
+          }
+        }
+        // Fora do ponto critico: cai no hover de estado (mesmo do MMGD).
+      }
+
+      // Hover de estado (MMGD e curtailment): UF real via pixel -> point-in-polygon.
+      if (!chart.containPixel({ geoIndex: 0 }, pixel)) { hideTip(); return; }
+      const lonLat = chart.convertFromPixel({ geoIndex: 0 }, pixel);
+      const uf = Array.isArray(lonLat) ? ufFromCoord(lonLat, geoFeaturesRef.current) : null;
+      if (!uf) { hideTip(); return; }
+      const name = ufToStateName[uf] || uf;
+      tip.innerHTML = `<span style="color:#cbd6e6;font-size:12px;font-weight:600;">${name}</span>`;
+      tip.style.display = 'block';
+      tip.style.left = `${pixel[0] + 14}px`;
+      tip.style.top = `${pixel[1] + 14}px`;
+    };
+
+    zr.on('mousemove', handleMove);
+    zr.on('globalout', hideTip);
+    return () => {
+      zr.off('mousemove', handleMove);
+      zr.off('globalout', hideTip);
+      hideTip();
+    };
+  }, [chartReady, mode]);
+
+  // Aplica a coloracao por nivel MMGD nos estados reais (regions do geo).
+  useEffect(() => {
+    const chart = chartInstanceRef.current;
+    if (!chart || !chartReady) return;
+    chart.setOption({ geo: { regions: geoRegions } });
+  }, [geoRegions, chartReady]);
+
   // Ponto 3: atualiza APENAS as series quando os dados mudam, via setOption
   // (merge incremental) — sem recriar a instancia nem re-registrar o mapa.
   useEffect(() => {
@@ -338,7 +473,10 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
       name: 'Zonas de Risco',
       type: 'custom',
       coordinateSystem: 'geo',
-      z: 2,
+      z: 6,
+      // Poligonos clicaveis (atualiza dados do estado); sem hover.
+      silent: false,
+      emphasis: { disabled: true },
       data: zoneData,
       renderItem: (params, api) => {
         const zone = zoneList[params.dataIndex];
@@ -346,99 +484,127 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
         const pts = zone.polygon.map((c) => api.coord(c));
         if (!pts.length) return null;
         const color = zone.color || '#94a3b8';
+
+        // Centroide (media dos vertices) para posicionar o rotulo da UF.
+        const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+        const cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+
         return {
-          type: 'polygon',
-          shape: { points: pts },
-          style: {
-            fill: hexToRgba(color, 0.18),
-            stroke: color,
-            lineWidth: 1.5,
-            lineDash: [6, 4],
-          },
-          emphasis: { style: { fill: hexToRgba(color, 0.32) } },
+          type: 'group',
+          children: [
+            {
+              type: 'polygon',
+              shape: { points: pts },
+              style: {
+                fill: hexToRgba(color, 0.2),
+                stroke: color,
+                lineWidth: 1.5,
+                lineDash: [6, 4],
+              },
+              cursor: 'pointer',
+            },
+            {
+              type: 'text',
+              style: {
+                text: zone.label || '',
+                x: cx,
+                y: cy,
+                textAlign: 'center',
+                textVerticalAlign: 'middle',
+                fontSize: 13,
+                fontWeight: 700,
+                fill: color,
+              },
+              silent: true,
+            },
+          ],
         };
       },
-      tooltip: {
-        show: true,
-        formatter: (params) => {
-          const zone = params?.data?.zone || {};
-          const color = zone.color || '#94a3b8';
-          return `
-            <div style="min-width:160px;">
-              <div style="font-weight:700;color:#f8fafc;margin-bottom:4px;">
-                <span style="color:${color};">▰</span> ${zone.label || 'Zone'}
-              </div>
-              <div style="display:flex;justify-content:space-between;color:#8ea1b8;font-size:12px;">
-                <span>Curtailment Prob.:</span>
-                <strong style="color:${color};">${zone.curtailmentProb ?? 0}%</strong>
-              </div>
-            </div>`;
-        },
-      },
+      // Sem tooltip (interacao e por clique).
+      tooltip: { show: false },
     };
+
+    // Linhas + ponto critico so aparecem no modo "Risco de Curtailment".
+    // As zonas (poligonos) sao renderizadas nos dois modos (zoneSeries abaixo).
+    // Alvos das linhas: alguns recursos ao redor do ponto critico (foto 2).
+    const resTargets = resourceScatterData
+      .map((r) => r.value)
+      .filter((v) => Array.isArray(v));
+    const cyanTarget = resTargets[0] || [safeLon, safeLat];
+    const redTargets = resTargets.slice(1, 3);
+
+    const curtailmentSeries = mode === 'curtailment' ? [
+      // Linha solida ciano (conexao principal).
+      {
+        type: 'lines',
+        coordinateSystem: 'geo',
+        data: [{ coords: [cyanTarget, [critLon, critLat]] }],
+        lineStyle: { color: '#38bdf8', width: 2.5, opacity: 0.9 },
+        z: 4,
+      },
+      // Linhas tracejadas vermelhas (rotas de risco a partir do ponto critico).
+      {
+        type: 'lines',
+        coordinateSystem: 'geo',
+        data: redTargets.map((t) => ({ coords: [[critLon, critLat], t] })),
+        lineStyle: { color: '#ef4444', width: 2, opacity: 0.85, type: 'dashed' },
+        z: 4,
+      },
+      {
+        name: 'Ponto Crítico',
+        type: 'effectScatter',
+        coordinateSystem: 'geo',
+        data: [{ name: critical.name, value: [critLon, critLat, 100], critical }],
+        symbolSize: 16,
+        showEffectOn: 'render',
+        rippleEffect: {
+          brushType: 'stroke',
+          scale: 6,
+          period: 3,
+          color: '#f97316',
+        },
+        itemStyle: {
+          color: '#ef4444',
+          shadowBlur: 30,
+          shadowColor: 'rgba(249, 115, 22, 0.9)',
+        },
+        z: 12,
+      },
+    ] : [];
 
     chart.setOption({
       series: [
         zoneSeries,
-        {
-          type: 'lines',
-          coordinateSystem: 'geo',
-          // Linhas convergindo do centro de risco para o ponto critico (cruzamento).
-          data: [
-            { coords: [[safeLon, safeLat], [critLon, critLat]] },
-            { coords: [[critLon, critLat], [-38.5, -12.97]] },
-          ],
-          lineStyle: {
-            color: '#38bdf8',
-            width: 2,
-            opacity: 0.85,
-          },
-        },
-        {
-          name: 'Ponto Crítico',
-          type: 'effectScatter',
-          coordinateSystem: 'geo',
-          // Ponto definido pelo cruzamento de coordenadas; carrega os dados do modal.
-          data: [{ name: critical.name, value: [critLon, critLat, 100], critical }],
-          symbolSize: 12,
-          showEffectOn: 'render',
-          rippleEffect: {
-            brushType: 'fill',
-            scale: 4,
-            color: '#f97316',
-          },
-          itemStyle: {
-            color: '#ef4444',
-          },
-        },
+        ...curtailmentSeries,
         {
           name: 'Recursos',
           type: 'scatter',
           coordinateSystem: 'geo',
           // Cada ponto ja traz symbol/symbolSize/itemStyle proprios no data.
-          // Sem zlevel separado: usa `z` para ficar acima do geo e acompanhar o roam.
+          // No modo MMGD os recursos ficam maiores/destacados (visao de geracao).
           data: resourceScatterData,
           z: 10,
-          emphasis: {
-            scale: 1.4,
-            itemStyle: {
-              shadowBlur: 16,
-            },
-          },
-          tooltip: {
-            show: true,
-            formatter: (params) => {
-              const d = params?.data || {};
-              return `<strong style="color:#f8fafc;">${d.name || 'Resource'}</strong>`;
-            },
-          },
+          symbolSize: mode === 'mmgd' ? 20 : undefined,
+          // No modo MMGD os icones nao capturam clique: o clique vai para a REGIAO.
+          silent: mode === 'mmgd',
+          emphasis: { disabled: true },
+          tooltip: { show: false },
         },
       ],
     }, { replaceMerge: 'series' });
-  }, [safeLon, safeLat, resourceScatterData, critical, chartReady, zoneList, zoneData]);
+  }, [safeLon, safeLat, resourceScatterData, critical, chartReady, zoneList, zoneData, mode]);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: '190px', backgroundColor: '#070c14', borderRadius: '8px', display: 'flex', flexDirection: 'column' }}>
+      {/* Tooltip de estado (modo MMGD), posicionado no cursor. */}
+      <div
+        ref={tooltipRef}
+        style={{
+          position: 'absolute', display: 'none', zIndex: 20, pointerEvents: 'none',
+          background: '#0d131d', border: '1px solid rgba(148,163,184,0.35)',
+          borderRadius: '8px', padding: '6px 10px', boxShadow: '0 6px 18px rgba(0,0,0,0.45)',
+        }}
+      />
       {loading && (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: '12px' }}>
           Carregando mapa do Brasil...
@@ -462,7 +628,7 @@ export default function RiskMap({ coordinates, points = [], resources = [], crit
           marginTop: '6px',
         }}
       >
-        {(resourceLegend.length ? resourceLegend : pointRows).map((entry) => (
+        {(legendItems.length ? legendItems : pointRows).map((entry) => (
           <div key={entry.type || entry.label} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
             <span
               style={{

@@ -1,11 +1,12 @@
 import Header from '../components/header'
 import RiskMap from '../components/RiskMap'
+import StoragePanel from '../components/StoragePanel'
 import '../App.css'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { RefreshCw, Zap, MapPin, TriangleAlert } from 'lucide-react'
+import { RefreshCw, Zap, ArrowDownToLine, LayoutGrid } from 'lucide-react'
 import * as echarts from 'echarts'
 import { fetchFirstAvailable } from '../services/api'
-import { normalizeTelemetryPayload } from '../utils/normalizeTelemetry'
+import { normalizeTelemetryPayload, applyStateData } from '../utils/normalizeTelemetry'
 import { useNormalizedTelemetry } from '../hooks/useNormalizedTelemetry'
 import { useTelemetryStream } from '../hooks/useTelemetryStream'
 import Skeleton from '../components/Skeleton'
@@ -55,26 +56,37 @@ function TelemetryPage() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   // Loading das requisicoes: true ate o 1o payload (stream/fetch) chegar ou falhar.
   const [isLoading, setIsLoading] = useState(true)
+  // Modo do mapa: 'mmgd' (Geracao MMGD) ou 'curtailment' (Risco de Curtailment).
+  const [mapMode, setMapMode] = useState('curtailment')
+  // Estado (UF) selecionado ao clicar num ativo no mapa MMGD. null = agregado.
+  const [selectedState, setSelectedState] = useState(null)
 
-  // Campos derivados do dado normalizado.
-  const horizonte = data.horizonte
-  const curtailmentValue = data.curtailmentValue
-  const p10 = data.p10
-  const p50 = data.p50
-  const p90 = data.p90
-  const energyRiskValue = data.energyRiskValue
-  const energyRiskMwh = data.energyRiskMwh
-  const criticalWindow = data.criticalWindow
+  // Aplica os dados do estado selecionado por cima do dado normalizado.
+  // Ativos no mesmo estado compartilham os mesmos dados (mesmo UF -> mesmos valores).
+  const view = useMemo(
+    () => (selectedState ? applyStateData(data, selectedState, data.assetsByState) : data),
+    [data, selectedState]
+  )
+
+  // Campos derivados do dado (com override do estado selecionado, se houver).
+  const kpis = view.kpis
+  const storage = view.storage
+  const horizonte = view.horizonte
+  const curtailmentValue = view.curtailmentValue
+  const criticalWindow = view.criticalWindow
   const mapCoordinates = data.mapCoordinates
   const criticalPoint = data.criticalPoint
   const riskPoints = data.riskPoints
   const riskZones = data.riskZones
   const mapResources = data.resources
+  const mmgdLevels = data.mmgdLevels
   const causeRows = data.causeRows
   const riskEvolutionSeries = data.riskEvolutionSeries
   const riskEvolutionPeak = data.riskEvolutionPeak
-  const transmissionLine = data.transmissionLine
-  const mitigation = data.mitigation
+
+  // Regiao/UF exibidos no RISK DETAILS: do estado selecionado, senao a selecao do usuario.
+  const viewRegiao = selectedState ? view.regiao : regiao
+  const viewUf = selectedState ? view.uf : uf
 
   const curtailmentChartRef = useRef(null)
   const curtailmentChartInstanceRef = useRef(null)
@@ -87,8 +99,8 @@ function TelemetryPage() {
   // Ponto 1B: fetcher usado tanto no fallback de polling quanto no refresh manual.
   // Corre os endpoints em paralelo (ponto 1A) e devolve o payload cru para o worker.
   const fetchTelemetryPayload = async (config = {}) => {
-    const { data } = await fetchFirstAvailable(TELEMETRY_ENDPOINTS, { timeout: 30000, ...config })
-    return data
+    const { data: payload } = await fetchFirstAvailable(TELEMETRY_ENDPOINTS, { timeout: 30000, ...config })
+    return payload
   }
 
   // Ponto 1B: stream em tempo real (SSE) com fallback de polling.
@@ -113,10 +125,8 @@ function TelemetryPage() {
   // O loading sempre encerra: no sucesso, na falha, e por um teto de tempo.
   // Sem backend, os campos caem nos defaults ja presentes no estado.
   useEffect(() => {
-    // Teto de seguranca independente do fetch: encerra o loading de qualquer jeito.
     const safety = setTimeout(() => setIsLoading(false), 1500)
 
-    // Nao bloqueia a UI: roda em paralelo ao stream/polling.
     fetchTelemetryPayload()
       .then((payload) => normalize(payload))
       .catch(() => {
@@ -202,8 +212,8 @@ function TelemetryPage() {
         system_status="online"
         title="ORÁCULO"
         dispatchText="VPP CORE"
-        modeOptions={['VPP', 'MODELS']}
-        defaultMode="VPP"
+        modeOptions={['Visão Detalhada', 'Visão Executiva']}
+        defaultMode="Visão Detalhada"
       />
 
       <div className="system-infos">
@@ -239,119 +249,120 @@ function TelemetryPage() {
         </div>
       </div>
 
-      <div className="prediction-info">
-        <div className="curtailment">
-          <div className="curtailment-header">
-            <div className="curtailment-title-wrap">
-              <h3>Curtailment Probability</h3>
-              <span className={`status-dot ${isHighCurtailment ? 'danger' : 'safe'}`}></span>
-            </div>
+      {/* Linha 1 — KPIs do topo (foto 1, em portugues) */}
+      <div className="kpi-row">
+        <div className="kpi-card">
+          <div className="kpi-card-head">
+            <span className="kpi-card-title">PROBABILIDADE DE CONSTRAINED OFF</span>
+            <span className={`status-dot ${isHighCurtailment ? 'danger' : 'safe'}`}></span>
           </div>
-          <div className="curtailment-data">
-            <div ref={curtailmentChartRef} className="donut-chart" />
-            <div className="curtailment-values">
-              <h2><Skeleton loading={isLoading} width={70} height={30}>{curtailmentValue}%</Skeleton></h2>
-              <p className={isHighCurtailment ? 'danger-text' : 'safe-text'}>
-                {isHighCurtailment ? 'Critical risk threshold exceeded' : 'Below critical threshold'}
-              </p>
-            </div>
-          </div>
-          <div className="curtailment-metrics">
-            <p>P10: <Skeleton loading={isLoading} width={28}>{p10}%</Skeleton></p>
-            <p>P50: <Skeleton loading={isLoading} width={28}>{p50}%</Skeleton></p>
-            <p>P90: <Skeleton loading={isLoading} width={28}>{p90}%</Skeleton></p>
+          <div className="kpi-donut-row">
+            <div ref={curtailmentChartRef} className="kpi-donut" />
+            <h2 className="kpi-donut-value">
+              <Skeleton loading={isLoading} width={60} height={26}>{curtailmentValue}%</Skeleton>
+            </h2>
           </div>
         </div>
 
-        <div className="energy-risk">
-          <div className="energy-risk-header">
-            <div className="energy-risk-title-wrap">
-              <h3>ENERGY AT RISK</h3>
-              <span className="energy-icon-box" aria-label="energy risk icon">
-                <Zap className="energy-icon" size={16} strokeWidth={2.5} />
-              </span>
-            </div>
+        <div className="kpi-card">
+          <div className="kpi-card-head">
+            <span className="kpi-card-title">VOLUME EÓLICO CONSTRAINED OFF PREVISTO</span>
+            <span className="kpi-icon-box amber"><Zap size={14} strokeWidth={2.5} /></span>
           </div>
-
-          <div className="energy-risk-value">
-            <div className="watts-values">
-              <h1><Skeleton loading={isLoading} width={90} height={34}>{energyRiskValue}</Skeleton></h1>
-              <p>MW</p>
-            </div>
-            <p><Skeleton loading={isLoading} width={150}>{energyRiskMwh} MWh (Energy Spill)</Skeleton></p>
+          <div className="kpi-big">
+            <Skeleton loading={isLoading} width={90} height={30}>{Number(kpis.volumeEolico).toLocaleString('pt-BR')}</Skeleton>
+            <span className="kpi-unit">MW</span>
           </div>
-
-          <div className="energy-risk-window">
-            <p>Critical window:</p>
-            <h3><Skeleton loading={isLoading} width={110}>{criticalWindow}</Skeleton></h3>
+          <div className="kpi-foot">
+            <span>Janela Crítica:</span>
+            <strong><Skeleton loading={isLoading} width={90}>{kpis.janelaCritica}</Skeleton></strong>
           </div>
         </div>
 
-        <div className="highest-risk">
-          <div className="highest-risk-header">
-            <div className="energy-risk-title-wrap">
-              <h3>HIGHEST-RISK NODE</h3>
-              <span className="highest-risk-icon-box" aria-label="highest risk icon">
-                <MapPin className="highest-risk-icon" size={16} strokeWidth={2.5} />
-              </span>
-            </div>
+        <div className="kpi-card">
+          <div className="kpi-card-head">
+            <span className="kpi-card-title">MINUTOS RESTRITOS POR HORA OPERATIVA</span>
+            <span className="kpi-icon-box cyan"><ArrowDownToLine size={14} strokeWidth={2.5} /></span>
           </div>
-
-          <div className="highest-risk-value">
-            <div className="highest-risk-node">
-              <h1><Skeleton loading={isLoading} width={120} height={30}>{regiao}({uf})</Skeleton></h1>
-            </div>
-            <p className="location"><Skeleton loading={isLoading} width={170}>{transmissionLine}</Skeleton></p>
+          <div className="kpi-big">
+            <Skeleton loading={isLoading} width={60} height={30}>{kpis.minutosRestritos}</Skeleton>
+            <span className="kpi-unit">min</span>
           </div>
-
-          <div className="energy-risk-window impacted-assets">
-            <p>Impacted Assets:</p>
-            <h3><Skeleton loading={isLoading} width={90}>{criticalPoint.affectedAssets} Farms</Skeleton></h3>
+          <div className="kpi-foot">
+            <span>Duração contínua:</span>
+            <strong><Skeleton loading={isLoading} width={70}>{kpis.duracaoContinua}</Skeleton></strong>
           </div>
         </div>
 
-        <div className="cause">
-          <div className="cause-header">
-            <h3>PROBABLE CAUSE</h3>
-            <span className="cause-icon-box" aria-label="probable cause icon">
-              <TriangleAlert className="cause-icon" size={16} strokeWidth={2.5} />
-            </span>
+        <div className="kpi-card">
+          <div className="kpi-card-head">
+            <span className="kpi-card-title">VOLUME MMGD TOTAL PREVISTO (T+24)</span>
+            <span className="kpi-icon-box"><LayoutGrid size={14} strokeWidth={2.5} /></span>
           </div>
-
-          <h2 className="cause-title">Transmission Limit Dominant</h2>
-
-          <div className="cause-list">
-            {causeRows.map(({ label, value, color }) => (
-              <div key={label} className="cause-row">
-                <span className="cause-label">{label}</span>
-                <div className="cause-bar-track">
-                  <span className="cause-bar" style={{ width: `${value}%`, background: color }} />
-                </div>
-                <span className="cause-value">{value}%</span>
-              </div>
-            ))}
+          <div className="kpi-big">
+            <Skeleton loading={isLoading} width={110} height={30}>{Number(kpis.volumeMMGD).toLocaleString('pt-BR')}</Skeleton>
+            <span className="kpi-unit">MW</span>
           </div>
         </div>
       </div>
 
-      <div className="risks-details">
-        <div className="risk-map">
-          <RiskMap
-            coordinates={mapCoordinates}
-            points={riskPoints.map((point) => ({
-              ...point,
-              value: String(point.value).endsWith('%') ? point.value : `${point.value}%`,
-            }))}
-            resources={mapResources}
-            criticalPoint={criticalPoint}
-            riskZones={riskZones}
-          />
+      {/* Linha 2 — Mapa (com switch) + Painel de Armazenamento (BESS) */}
+      <div className="telemetry-main-row">
+        <div className="map-panel">
+          <div className="map-panel-head">
+            <div className="map-panel-title">
+              <span className="map-title-dot" />
+              MEUS ATIVOS — CONJUNTO EÓLICO CAÇAMARI
+            </div>
+            <div className="map-switch">
+              <button
+                type="button"
+                className={`map-switch-btn ${mapMode === 'mmgd' ? 'active' : ''}`}
+                onClick={() => { setMapMode('mmgd') }}
+              >
+                Geração MMGD
+              </button>
+              <button
+                type="button"
+                className={`map-switch-btn ${mapMode === 'curtailment' ? 'active' : ''}`}
+                onClick={() => { setMapMode('curtailment'); setSelectedState(null) }}
+              >
+                Risco de Curtailment
+              </button>
+            </div>
+          </div>
+          {mapMode === 'mmgd' && selectedState && (
+            <div className="map-selected-note">
+              Exibindo dados de <strong>{view.regiao} ({selectedState})</strong>
+              <button type="button" className="map-clear-btn" onClick={() => setSelectedState(null)}>limpar</button>
+            </div>
+          )}
+          <div className="map-panel-body">
+            <RiskMap
+              mode={mapMode}
+              coordinates={mapCoordinates}
+              points={riskPoints.map((point) => ({
+                ...point,
+                value: String(point.value).endsWith('%') ? point.value : `${point.value}%`,
+              }))}
+              resources={mapResources}
+              criticalPoint={criticalPoint}
+              riskZones={riskZones}
+              mmgdLevels={mmgdLevels}
+              onSelectState={mapMode === 'mmgd' ? setSelectedState : null}
+            />
+          </div>
         </div>
 
+        <StoragePanel storage={storage} loading={isLoading} />
+      </div>
+
+      {/* Linha 3 — RISK DETAILS + RISK EVOLUTION ao lado da Causa Provável */}
+      <div className="risks-details">
         <div className="risk-deep-data">
           <div className="risk-deep-data-header">
             <h2>RISK DETAILS</h2>
-            <span className="risk-deep-region">{regiao} ({uf})</span>
+            <span className="risk-deep-region">{viewRegiao} ({viewUf})</span>
           </div>
 
           <div className="risk-detail-list">
@@ -369,7 +380,7 @@ function TelemetryPage() {
             </div>
             <div className="risk-detail-row">
               <span className="risk-detail-label">Most Exposed Region</span>
-              <strong className="risk-detail-value danger">{uf} {regiao}</strong>
+              <strong className="risk-detail-value danger">{viewUf} {viewRegiao}</strong>
             </div>
             <div className="risk-detail-row">
               <span className="risk-detail-label">Probable Cause</span>
@@ -448,222 +459,28 @@ function TelemetryPage() {
             </div>
           </div>
         </div>
-      </div>
-      <div className="renew-scenarios panel-block">
-        <div className="panel-header">
-          <h3>Renewable Generation Scenarios (MW)</h3>
-          <div className="panel-header-tools">
-            <div className="inline-legend">
-              <span className="legend-swatch p90" /> P90
-              <span className="legend-swatch p50" /> P50
-              <span className="legend-swatch p10" /> P10
-            </div>
-          </div>
-        </div>
 
-        <div className="scenario-layout">
-          <div className="scenario-cards">
-            <div className="scenario-card selected">
-              <span className="scenario-label">Best Case (P50)</span>
-              <div className="scenario-value-row">
-                <strong>2,400</strong>
-                <span>MW</span>
-              </div>
-              <small>Curtailment: 210 MW</small>
-            </div>
-
-            <div className="scenario-card worst-case">
-              <span className="scenario-label">Worst Case (P10)</span>
-              <div className="scenario-value-row">
-                <strong>1,900</strong>
-                <span>MW</span>
-              </div>
-              <small>Curtailment: 380 MW</small>
-            </div>
-
-            <div className="scenario-card best-case">
-              <span className="scenario-label">Best Case (P90)</span>
-              <div className="scenario-value-row">
-                <strong>2,800</strong>
-                <span>MW</span>
-              </div>
-              <small>Curtailment: 80 MW</small>
-            </div>
-
-            <div className="scenario-card">
-              <span className="scenario-label">Scenario</span>
-              <select defaultValue="scenario-1">
-                <option value="scenario-1">Select scenario</option>
-                <option value="scenario-2">Low curtailment</option>
-                <option value="scenario-3">Base case</option>
-                <option value="scenario-4">High stress</option>
-              </select>
-            </div>
+        <div className="cause">
+          <div className="cause-header">
+            <h3>CAUSA PROVÁVEL</h3>
+            <span className="cause-icon-box" aria-label="ícone de causa provável">
+              <Zap className="cause-icon" size={16} strokeWidth={2.5} />
+            </span>
           </div>
 
-          <div className="scenario-chart-panel">
-            <div className="chart-topline">
-              <span>Generation Scenarios — N possible trajectories</span>
-              <div className="chart-line-labels">
-                <span style={{ color: '#f5b94b' }}>P90</span>
-                <span style={{ color: '#3dd9ff' }}>P50</span>
-                <span style={{ color: '#f97316' }}>P10</span>
+          <h2 className="cause-title">Limite de Transmissão Dominante</h2>
+
+          <div className="cause-list">
+            {causeRows.map(({ label, value, color }) => (
+              <div key={label} className="cause-row">
+                <span className="cause-label">{label}</span>
+                <div className="cause-bar-track">
+                  <span className="cause-bar" style={{ width: `${value}%`, background: color }} />
+                </div>
+                <span className="cause-value">{value}%</span>
               </div>
-            </div>
-
-            <svg viewBox="0 0 640 240" className="scenario-svg" role="img" aria-label="Renewable generation scenarios chart">
-              {[0, 1, 2, 3, 4].map((tick) => {
-                const y = 20 + tick * 46
-                return <line key={tick} x1="28" y1={y} x2="610" y2={y} stroke="rgba(148,163,184,0.18)" strokeDasharray="4 8" />
-              })}
-
-              <path d="M 30 170 C 100 150, 150 128, 210 118 S 330 100, 390 92 S 500 75, 610 60" fill="none" stroke="#f59e0b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M 30 190 C 90 180, 120 160, 180 142 S 300 114, 390 104 S 510 92, 610 88" fill="none" stroke="#3dd9ff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M 30 205 C 100 198, 170 186, 250 170 S 380 130, 440 120 S 540 106, 610 92" fill="none" stroke="#f97316" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-
-              {[0, 1, 2, 3, 4, 5].map((tick) => {
-                const x = 30 + tick * 116
-                const labels = ['00:00', '06:00', '12:00', '18:00', '24:00', '30:00']
-                return (
-                  <text key={tick} x={x} y="224" fill="rgba(219,225,235,0.7)" fontSize="10" textAnchor="middle">
-                    {labels[tick]}
-                  </text>
-                )
-              })}
-            </svg>
+            ))}
           </div>
-        </div>
-      </div>
-
-      <div className="vpp-sources panel-block">
-        <div className="vpp-header-row">
-          <h3>VPP Resources <span>(Available for Curtailment Mitigation &amp; Dispatch)</span></h3>
-          <div className="aggregate-select">
-            <span>Aggregate by:</span>
-            <select defaultValue="Region">
-              <option>Region</option>
-              <option>Asset</option>
-              <option>Technology</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="vpp-main-layout">
-          <div className="vpp-cards">
-            <div className="vpp-card">
-              <div className="vpp-card-head">
-                <span className="resource-icon green">⚡</span>
-                BESS
-              </div>
-              <div className="vpp-value">180 <small>MW</small></div>
-              <div className="vpp-subvalue">428 MWh</div>
-              <div className="vpp-foot">
-                <span>Availability: 96%</span>
-                <span>Assets: 8</span>
-                <button type="button">View details</button>
-              </div>
-            </div>
-
-            <div className="vpp-card">
-              <div className="vpp-card-head">
-                <span className="resource-icon blue">◫</span>
-                MMGD
-              </div>
-              <div className="vpp-value">120 <small>MW</small></div>
-              <div className="vpp-subvalue">Solar DG</div>
-              <div className="vpp-foot">
-                <span>Availability: 91%</span>
-                <span>Assets: 56</span>
-                <button type="button">View details</button>
-              </div>
-            </div>
-
-            <div className="vpp-card">
-              <div className="vpp-card-head">
-                <span className="resource-icon amber">▣</span>
-                Distributed Gen
-              </div>
-              <div className="vpp-value">68 <small>MW</small></div>
-              <div className="vpp-subvalue">60 MW / Hydro</div>
-              <div className="vpp-foot">
-                <span>Availability: 94%</span>
-                <span>Assets: 66</span>
-                <button type="button">View details</button>
-              </div>
-            </div>
-
-            <div className="vpp-card">
-              <div className="vpp-card-head">
-                <span className="resource-icon cyan">◇</span>
-                Flexible Loads
-              </div>
-              <div className="vpp-value">75 <small>MW</small></div>
-              <div className="vpp-subvalue">Industrial DR</div>
-              <div className="vpp-foot">
-                <span>Availability: 88%</span>
-                <span>Assets: 10</span>
-                <button type="button">View details</button>
-              </div>
-            </div>
-
-            <div className="vpp-card">
-              <div className="vpp-card-head">
-                <span className="resource-icon violet">◎</span>
-                Other Resources
-              </div>
-              <div className="vpp-value">40 <small>MW</small></div>
-              <div className="vpp-subvalue">Demand response</div>
-              <div className="vpp-foot">
-                <span>Availability: 90%</span>
-                <span>Assets: 19</span>
-                <button type="button">View details</button>
-              </div>
-            </div>
-          </div>
-
-          <aside className="mitigation-panel">
-            <div className="mitigation-header">
-              <span className="mitigation-badge">✓</span>
-              Recommended ISO dispatch action
-            </div>
-
-            <h4><Skeleton loading={isLoading} width={260}>{mitigation.action}</Skeleton></h4>
-
-            <div className="mitigation-metrics">
-              <div className="mitigation-row">
-                <span className="mitigation-label">Curtailment without action:</span>
-                <strong className="mitigation-value danger">
-                  <Skeleton loading={isLoading} width={60}>{mitigation.curtailmentWithout} <small>MWh</small></Skeleton>
-                </strong>
-              </div>
-              <div className="mitigation-row">
-                <span className="mitigation-label">Curtailment after action:</span>
-                <strong className="mitigation-value success">
-                  <Skeleton loading={isLoading} width={60}>{mitigation.curtailmentAfter} <small>MWh</small></Skeleton>
-                </strong>
-              </div>
-              <div className="mitigation-row">
-                <span className="mitigation-label">Energy potentially recovered:</span>
-                <strong className="mitigation-value">
-                  <Skeleton loading={isLoading} width={60}>{mitigation.energyRecovered} <small>MWh</small></Skeleton>
-                </strong>
-              </div>
-              <div className="mitigation-row">
-                <span className="mitigation-label">Mitigation coverage:</span>
-                <strong className="mitigation-value warning">
-                  <Skeleton loading={isLoading} width={40}>{mitigation.coverage}<small>%</small></Skeleton>
-                </strong>
-              </div>
-              <div className="mitigation-row mitigation-row-divider">
-                <span className="mitigation-label">Resources required:</span>
-                <strong className="mitigation-value strong">
-                  <Skeleton loading={isLoading} width={220}>{mitigation.resourcesRequired}</Skeleton>
-                </strong>
-              </div>
-            </div>
-
-            <button type="button" className="simulate-button">Simulate mitigation →</button>
-          </aside>
         </div>
       </div>
     </>

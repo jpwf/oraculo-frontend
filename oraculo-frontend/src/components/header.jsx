@@ -41,8 +41,8 @@ function Header({
   initialLatency = 18,
   title = 'ORÁCULO',
   dispatchText = '',
-  modeOptions = ['VPP', 'MODELS'],
-  defaultMode = 'VPP',
+  modeOptions = ['Visão Detalhada', 'Visão Executiva'],
+  defaultMode = 'Visão Detalhada',
   showDispatch = true,
   showModeSwitch = true,
   showStatus = true,
@@ -51,7 +51,8 @@ function Header({
 }) {
   const location = useLocation()
   const navigate = useNavigate()
-  const routeMode = location.pathname.startsWith('/telemetry') ? 'VPP' : 'MODELS'
+  // /telemetry = Visao Detalhada; demais = Visao Executiva.
+  const routeMode = location.pathname.startsWith('/telemetry') ? 'Visão Detalhada' : 'Visão Executiva'
   const [selectedMode, setSelectedMode] = useState(routeMode || defaultMode)
   const [latencyMs] = useState(initialLatency)
   const [utcTime, setUtcTime] = useState(() => formatUtcDate(new Date()))
@@ -73,7 +74,7 @@ function Header({
   const handleModeChange = (option) => {
     setSelectedMode(option)
 
-    if (option === 'VPP') {
+    if (option === 'Visão Detalhada') {
       navigate('/telemetry')
       return
     }
