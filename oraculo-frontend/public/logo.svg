@@ -1,0 +1,32 @@
+<svg viewBox="0 0 1600 1200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Fundo escuro conforme a foto -->
+  <rect width="1600" height="1200" fill="#121820" />
+
+  <g transform="translate(800, 600)">
+    <!-- Haste vertical superior e inferior (Dourada) -->
+    <path d="M -25,-480 L 25,-480 L 35,-260 L -35,-260 Z" fill="#b88f51" />
+    <path d="M -45,-380 L 45,-380 L 55,-350 L -55,-350 Z" fill="#d4af66" />
+    <path d="M -20,260 L 20,260 L 25,480 L -25,480 Z" fill="#b88f51" />
+    <path d="M -35,320 L 35,320 L 40,340 L -40,340 Z" fill="#d4af66" />
+
+    <!-- Raios/Feixes diagonais superiores -->
+    <path d="M -30,-280 L -300,-420 L -280,-440 L -20,-310 Z" fill="#7a8b9e" opacity="0.8" />
+    <path d="M 30,-280 L 300,-420 L 280,-440 L 20,-310 Z" fill="#7a8b9e" opacity="0.8" />
+
+    <!-- Losango exterior (Estrutura do Olho - Prata/Metalizado) -->
+    <path d="M 0,-240 L 550,0 L 0,240 L -550,0 Z" fill="none" stroke="#d5dcbe" stroke-width="60" stroke-linejoin="round" />
+    
+    <!-- Moldura dourada interna do losango -->
+    <path d="M 0,-170 L 410,0 L 0,170 L -410,0 Z" fill="none" stroke="#8c6d37" stroke-width="20" stroke-linejoin="round" />
+
+    <!-- Círculo Central Exterior (Anel Dourado) -->
+    <circle cx="0" cy="0" r="140" fill="#8c6d37" stroke="#d4af66" stroke-width="15" />
+    
+    <!-- Círculo Central Interior (Fundo Escuro do Olho) -->
+    <circle cx="0" cy="0" r="90" fill="#1a140e" />
+
+    <!-- Pupila / Centro Luminoso -->
+    <circle cx="0" cy="0" r="45" fill="#f5d061" />
+    <circle cx="0" cy="0" r="20" fill="#ffffff" />
+  </g>
+</svg>

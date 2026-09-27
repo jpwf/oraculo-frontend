@@ -1,0 +1,203 @@
+.header {
+  width: 100%;
+  min-height: 92px;
+  background-color: #0a1020;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 28px;
+  box-sizing: border-box;
+  color: #f3f4f6;
+  gap: 16px;
+  border-bottom: 1px solid #403d3d;
+}
+
+.left-side {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex: 1;
+}
+
+.dispatch-copy {
+  display: flex;
+  align-items: center;
+  border: 1px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.08);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+.dispatch-copy h3 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: #f59e0b;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.type-switch {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10%;
+  overflow: hidden;
+}
+
+.switch-button {
+  border: none;
+  background: #000000;
+  color: #c7ced8;
+  padding: 8px 18px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+}
+
+.switch-button.selected {
+  background: #f59e0b;
+  color: #000000;
+}
+
+.right-side {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 18px;
+  flex-wrap: wrap;
+  min-height: 40px;
+}
+
+.status-block,
+.latency-block,
+.utc-block {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
+
+.bullet-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  background: #22c55e;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.8);
+}
+
+.status-online {
+  color: #22c55e;
+}
+
+.status-warning {
+  color: #f59e0b;
+}
+
+.status-warning.bullet-status,
+.status-warning {
+  background: #f59e0b;
+  color: #f59e0b;
+}
+
+.status-offline {
+  color: #ef4444;
+}
+
+.status-offline.bullet-status,
+.status-offline {
+  background: #ef4444;
+  color: #ef4444;
+}
+
+.text-status {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.secondary-bullet {
+  background: #aab2bf;
+  box-shadow: none;
+}
+
+.latency-field {
+  width: 88px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+  color: #dfe3ea;
+  padding: 6px 8px;
+  font-size: 11px;
+  text-align: center;
+  outline: none;
+}
+
+.latency-label,
+.latency-value,
+.utc-value {
+  font-size: 11px;
+  color: #d3d9e3;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.utc-value {
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-weight: 500;
+}
+
+@media (max-width: 900px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 16px 18px;
+  }
+
+  .left-side,
+  .right-side {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .left-side {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .right-side {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .header {
+    padding: 14px 12px;
+    gap: 12px;
+  }
+
+  /* Switch de modo ocupa a largura toda e divide os botões igualmente. */
+  .type-switch {
+    width: 100%;
+    border-radius: 8px;
+  }
+
+  .switch-button {
+    flex: 1;
+    padding: 10px 8px;
+    text-align: center;
+  }
+
+  .right-side {
+    gap: 12px;
+  }
+}
